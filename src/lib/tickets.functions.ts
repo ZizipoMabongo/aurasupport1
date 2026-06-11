@@ -318,7 +318,31 @@ export const resolveTicket = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: prof } = await supabaseAdmin.from("profiles").select("full_name").eq("id", context.userId).maybeSingle();
     const { data: roleRow } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", context.userId).maybeSingle();
-    const role = roleRow?.role ?? "analyst";
+    const role = (roleRow?.role ?? "analyst") as "crew" | "analyst" | "admin";
+
+    const { data: t } = await supabaseAdmin
+      .from("tickets")
+      .select("status, escalated_by, escalated_to")
+      .eq("id", data.ticket_id)
+      .maybeSingle();
+    if (!t) throw new Error("Ticket not found");
+    if (t.status === "Resolved" || t.status === "Rejected") throw new Error("Ticket already closed");
+
+    if (role === "admin") {
+      // Admins may only resolve tickets that were escalated to them
+      if (t.status !== "Escalated" && t.escalated_to !== context.userId) {
+        throw new Error("Admins can only resolve escalated tickets");
+      }
+    } else if (role === "analyst") {
+      // An analyst cannot resolve a ticket they themselves escalated, unless the escalation was rejected (escalated_by cleared)
+      if (t.escalated_by && t.escalated_by === context.userId) {
+        throw new Error("You escalated this ticket — only the admin can resolve it, unless the escalation is rejected back to you.");
+      }
+      if (t.status === "Escalated") {
+        throw new Error("This ticket is currently escalated to the admin.");
+      }
+    }
+
     const { error } = await supabaseAdmin
       .from("tickets")
       .update({ status: "Resolved", resolved_at: new Date().toISOString() })
@@ -334,26 +358,64 @@ export const resolveTicket = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const rejectTicket = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ ticket_id: z.string().uuid(), reason: z.string().trim().min(3).max(1000) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: prof } = await supabaseAdmin.from("profiles").select("full_name").eq("id", context.userId).maybeSingle();
+    const { data: roleRow } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", context.userId).maybeSingle();
+    const role = (roleRow?.role ?? "analyst") as "crew" | "analyst" | "admin";
+
+    const { error } = await supabaseAdmin
+      .from("tickets")
+      .update({ status: "Rejected", rejection_reason: data.reason, resolved_at: new Date().toISOString() })
+      .eq("id", data.ticket_id);
+    if (error) throw new Error("Could not reject ticket");
+
+    await supabaseAdmin.from("chat_messages").insert({
+      ticket_id: data.ticket_id,
+      sender_kind: "system",
+      sender_name: "System",
+      body: `Ticket rejected: ${data.reason}`,
+    });
+    await writeAudit(supabaseAdmin, {
+      ticket_id: data.ticket_id,
+      actor_kind: role as "analyst" | "admin",
+      actor_user_id: context.userId,
+      actor_name: prof?.full_name ?? "Staff",
+      action: "ticket.rejected",
+      details: { reason: data.reason },
+    });
+    return { ok: true };
+  });
+
 export const escalateTicket = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
-    z.object({ ticket_id: z.string().uuid(), reason: z.string().optional() }).parse(input),
+    z.object({ ticket_id: z.string().uuid(), reason: z.string().trim().min(3).max(1000) }).parse(input),
   )
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: prof } = await supabaseAdmin.from("profiles").select("full_name").eq("id", context.userId).maybeSingle();
     const { error } = await supabaseAdmin
       .from("tickets")
-      .update({ status: "Escalated" })
+      .update({
+        status: "Escalated",
+        escalated_by: context.userId,
+        escalation_reason: data.reason,
+        escalation_rejection_reason: null,
+      })
       .eq("id", data.ticket_id);
     if (error) throw new Error("Could not escalate");
 
-    // System message in the same chat thread (continuity rule)
     await supabaseAdmin.from("chat_messages").insert({
       ticket_id: data.ticket_id,
       sender_kind: "system",
       sender_name: "System",
-      body: `Ticket escalated to admin${data.reason ? `: ${data.reason}` : ""}. The conversation continues here.`,
+      body: `Ticket escalated to admin: ${data.reason}. The conversation continues here.`,
     });
 
     await writeAudit(supabaseAdmin, {
@@ -362,7 +424,7 @@ export const escalateTicket = createServerFn({ method: "POST" })
       actor_user_id: context.userId,
       actor_name: prof?.full_name ?? "Analyst",
       action: "ticket.escalated",
-      details: { reason: data.reason ?? null },
+      details: { reason: data.reason },
     });
     return { ok: true };
   });
@@ -370,7 +432,7 @@ export const escalateTicket = createServerFn({ method: "POST" })
 export const rejectEscalation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
-    z.object({ ticket_id: z.string().uuid() }).parse(input),
+    z.object({ ticket_id: z.string().uuid(), reason: z.string().trim().min(3).max(1000) }).parse(input),
   )
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -379,14 +441,19 @@ export const rejectEscalation = createServerFn({ method: "POST" })
     const { data: prof } = await supabaseAdmin.from("profiles").select("full_name").eq("id", context.userId).maybeSingle();
     const { error } = await supabaseAdmin
       .from("tickets")
-      .update({ status: "In Progress", escalated_to: null })
+      .update({
+        status: "In Progress",
+        escalated_to: null,
+        escalated_by: null,
+        escalation_rejection_reason: data.reason,
+      })
       .eq("id", data.ticket_id);
     if (error) throw new Error("Could not reject escalation");
     await supabaseAdmin.from("chat_messages").insert({
       ticket_id: data.ticket_id,
       sender_kind: "system",
       sender_name: "System",
-      body: "Escalation rejected. Returned to analyst queue.",
+      body: `Escalation rejected by admin: ${data.reason}. Returned to analyst queue.`,
     });
     await writeAudit(supabaseAdmin, {
       ticket_id: data.ticket_id,
@@ -394,6 +461,7 @@ export const rejectEscalation = createServerFn({ method: "POST" })
       actor_user_id: context.userId,
       actor_name: prof?.full_name ?? "Admin",
       action: "escalation.rejected",
+      details: { reason: data.reason },
     });
     return { ok: true };
   });
