@@ -254,7 +254,7 @@ export const acceptTicket = createServerFn({ method: "POST" })
     const { data: prof } = await supabaseAdmin.from("profiles").select("full_name").eq("id", context.userId).maybeSingle();
     const { data: roleRow } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", context.userId).maybeSingle();
     const role = roleRow?.role ?? "analyst";
-    const update: Record<string, unknown> = { status: "In Progress" };
+    const update: { status: "In Progress"; assigned_to?: string; escalated_to?: string } = { status: "In Progress" };
     if (role === "admin") update.escalated_to = context.userId;
     else update.assigned_to = context.userId;
     const { error } = await supabaseAdmin.from("tickets").update(update).eq("id", data.ticket_id);
