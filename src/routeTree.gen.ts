@@ -9,38 +9,201 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as GuestLoginRouteImport } from './routes/guest-login'
+import { Route as GuestRouteImport } from './routes/guest'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as GuestIndexRouteImport } from './routes/guest.index'
+import { Route as AuthenticatedStaffRouteImport } from './routes/_authenticated/staff'
+import { Route as GuestTicketIdRouteImport } from './routes/guest.ticket.$id'
+import { Route as AuthenticatedStaffCrewRouteImport } from './routes/_authenticated/staff.crew'
+import { Route as AuthenticatedStaffAnalystRouteImport } from './routes/_authenticated/staff.analyst'
+import { Route as AuthenticatedStaffAdminRouteImport } from './routes/_authenticated/staff.admin'
+import { Route as AuthenticatedStaffTicketIdRouteImport } from './routes/_authenticated/staff.ticket.$id'
 
+const GuestLoginRoute = GuestLoginRouteImport.update({
+  id: '/guest-login',
+  path: '/guest-login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GuestRoute = GuestRouteImport.update({
+  id: '/guest',
+  path: '/guest',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GuestIndexRoute = GuestIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => GuestRoute,
+} as any)
+const AuthenticatedStaffRoute = AuthenticatedStaffRouteImport.update({
+  id: '/staff',
+  path: '/staff',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const GuestTicketIdRoute = GuestTicketIdRouteImport.update({
+  id: '/ticket/$id',
+  path: '/ticket/$id',
+  getParentRoute: () => GuestRoute,
+} as any)
+const AuthenticatedStaffCrewRoute = AuthenticatedStaffCrewRouteImport.update({
+  id: '/crew',
+  path: '/crew',
+  getParentRoute: () => AuthenticatedStaffRoute,
+} as any)
+const AuthenticatedStaffAnalystRoute =
+  AuthenticatedStaffAnalystRouteImport.update({
+    id: '/analyst',
+    path: '/analyst',
+    getParentRoute: () => AuthenticatedStaffRoute,
+  } as any)
+const AuthenticatedStaffAdminRoute = AuthenticatedStaffAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AuthenticatedStaffRoute,
+} as any)
+const AuthenticatedStaffTicketIdRoute =
+  AuthenticatedStaffTicketIdRouteImport.update({
+    id: '/ticket/$id',
+    path: '/ticket/$id',
+    getParentRoute: () => AuthenticatedStaffRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/guest': typeof GuestRouteWithChildren
+  '/guest-login': typeof GuestLoginRoute
+  '/staff': typeof AuthenticatedStaffRouteWithChildren
+  '/guest/': typeof GuestIndexRoute
+  '/staff/admin': typeof AuthenticatedStaffAdminRoute
+  '/staff/analyst': typeof AuthenticatedStaffAnalystRoute
+  '/staff/crew': typeof AuthenticatedStaffCrewRoute
+  '/guest/ticket/$id': typeof GuestTicketIdRoute
+  '/staff/ticket/$id': typeof AuthenticatedStaffTicketIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/guest-login': typeof GuestLoginRoute
+  '/staff': typeof AuthenticatedStaffRouteWithChildren
+  '/guest': typeof GuestIndexRoute
+  '/staff/admin': typeof AuthenticatedStaffAdminRoute
+  '/staff/analyst': typeof AuthenticatedStaffAnalystRoute
+  '/staff/crew': typeof AuthenticatedStaffCrewRoute
+  '/guest/ticket/$id': typeof GuestTicketIdRoute
+  '/staff/ticket/$id': typeof AuthenticatedStaffTicketIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/guest': typeof GuestRouteWithChildren
+  '/guest-login': typeof GuestLoginRoute
+  '/_authenticated/staff': typeof AuthenticatedStaffRouteWithChildren
+  '/guest/': typeof GuestIndexRoute
+  '/_authenticated/staff/admin': typeof AuthenticatedStaffAdminRoute
+  '/_authenticated/staff/analyst': typeof AuthenticatedStaffAnalystRoute
+  '/_authenticated/staff/crew': typeof AuthenticatedStaffCrewRoute
+  '/guest/ticket/$id': typeof GuestTicketIdRoute
+  '/_authenticated/staff/ticket/$id': typeof AuthenticatedStaffTicketIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/guest'
+    | '/guest-login'
+    | '/staff'
+    | '/guest/'
+    | '/staff/admin'
+    | '/staff/analyst'
+    | '/staff/crew'
+    | '/guest/ticket/$id'
+    | '/staff/ticket/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/auth'
+    | '/guest-login'
+    | '/staff'
+    | '/guest'
+    | '/staff/admin'
+    | '/staff/analyst'
+    | '/staff/crew'
+    | '/guest/ticket/$id'
+    | '/staff/ticket/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/_authenticated'
+    | '/auth'
+    | '/guest'
+    | '/guest-login'
+    | '/_authenticated/staff'
+    | '/guest/'
+    | '/_authenticated/staff/admin'
+    | '/_authenticated/staff/analyst'
+    | '/_authenticated/staff/crew'
+    | '/guest/ticket/$id'
+    | '/_authenticated/staff/ticket/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  AuthRoute: typeof AuthRoute
+  GuestRoute: typeof GuestRouteWithChildren
+  GuestLoginRoute: typeof GuestLoginRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/guest-login': {
+      id: '/guest-login'
+      path: '/guest-login'
+      fullPath: '/guest-login'
+      preLoaderRoute: typeof GuestLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/guest': {
+      id: '/guest'
+      path: '/guest'
+      fullPath: '/guest'
+      preLoaderRoute: typeof GuestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +211,104 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/guest/': {
+      id: '/guest/'
+      path: '/'
+      fullPath: '/guest/'
+      preLoaderRoute: typeof GuestIndexRouteImport
+      parentRoute: typeof GuestRoute
+    }
+    '/_authenticated/staff': {
+      id: '/_authenticated/staff'
+      path: '/staff'
+      fullPath: '/staff'
+      preLoaderRoute: typeof AuthenticatedStaffRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/guest/ticket/$id': {
+      id: '/guest/ticket/$id'
+      path: '/ticket/$id'
+      fullPath: '/guest/ticket/$id'
+      preLoaderRoute: typeof GuestTicketIdRouteImport
+      parentRoute: typeof GuestRoute
+    }
+    '/_authenticated/staff/crew': {
+      id: '/_authenticated/staff/crew'
+      path: '/crew'
+      fullPath: '/staff/crew'
+      preLoaderRoute: typeof AuthenticatedStaffCrewRouteImport
+      parentRoute: typeof AuthenticatedStaffRoute
+    }
+    '/_authenticated/staff/analyst': {
+      id: '/_authenticated/staff/analyst'
+      path: '/analyst'
+      fullPath: '/staff/analyst'
+      preLoaderRoute: typeof AuthenticatedStaffAnalystRouteImport
+      parentRoute: typeof AuthenticatedStaffRoute
+    }
+    '/_authenticated/staff/admin': {
+      id: '/_authenticated/staff/admin'
+      path: '/admin'
+      fullPath: '/staff/admin'
+      preLoaderRoute: typeof AuthenticatedStaffAdminRouteImport
+      parentRoute: typeof AuthenticatedStaffRoute
+    }
+    '/_authenticated/staff/ticket/$id': {
+      id: '/_authenticated/staff/ticket/$id'
+      path: '/ticket/$id'
+      fullPath: '/staff/ticket/$id'
+      preLoaderRoute: typeof AuthenticatedStaffTicketIdRouteImport
+      parentRoute: typeof AuthenticatedStaffRoute
+    }
   }
 }
 
+interface AuthenticatedStaffRouteChildren {
+  AuthenticatedStaffAdminRoute: typeof AuthenticatedStaffAdminRoute
+  AuthenticatedStaffAnalystRoute: typeof AuthenticatedStaffAnalystRoute
+  AuthenticatedStaffCrewRoute: typeof AuthenticatedStaffCrewRoute
+  AuthenticatedStaffTicketIdRoute: typeof AuthenticatedStaffTicketIdRoute
+}
+
+const AuthenticatedStaffRouteChildren: AuthenticatedStaffRouteChildren = {
+  AuthenticatedStaffAdminRoute: AuthenticatedStaffAdminRoute,
+  AuthenticatedStaffAnalystRoute: AuthenticatedStaffAnalystRoute,
+  AuthenticatedStaffCrewRoute: AuthenticatedStaffCrewRoute,
+  AuthenticatedStaffTicketIdRoute: AuthenticatedStaffTicketIdRoute,
+}
+
+const AuthenticatedStaffRouteWithChildren =
+  AuthenticatedStaffRoute._addFileChildren(AuthenticatedStaffRouteChildren)
+
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedStaffRoute: typeof AuthenticatedStaffRouteWithChildren
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedStaffRoute: AuthenticatedStaffRouteWithChildren,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
+interface GuestRouteChildren {
+  GuestIndexRoute: typeof GuestIndexRoute
+  GuestTicketIdRoute: typeof GuestTicketIdRoute
+}
+
+const GuestRouteChildren: GuestRouteChildren = {
+  GuestIndexRoute: GuestIndexRoute,
+  GuestTicketIdRoute: GuestTicketIdRoute,
+}
+
+const GuestRouteWithChildren = GuestRoute._addFileChildren(GuestRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  AuthRoute: AuthRoute,
+  GuestRoute: GuestRouteWithChildren,
+  GuestLoginRoute: GuestLoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
