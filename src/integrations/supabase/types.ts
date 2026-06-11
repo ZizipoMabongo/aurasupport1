@@ -230,13 +230,17 @@ export type Database = {
           department: Database["public"]["Enums"]["department"] | null
           description: string
           effective_role: Database["public"]["Enums"]["effective_role"]
+          escalated_by: string | null
           escalated_to: string | null
+          escalation_reason: string | null
+          escalation_rejection_reason: string | null
           first_response_at: string | null
           guest_allowed: boolean
           id: string
           on_behalf_of_guest_id: string | null
           parent_submission_id: string | null
           priority: Database["public"]["Enums"]["priority"] | null
+          rejection_reason: string | null
           resolved_at: string | null
           status: Database["public"]["Enums"]["ticket_status"]
           subcategory: string | null
@@ -254,13 +258,17 @@ export type Database = {
           department?: Database["public"]["Enums"]["department"] | null
           description: string
           effective_role: Database["public"]["Enums"]["effective_role"]
+          escalated_by?: string | null
           escalated_to?: string | null
+          escalation_reason?: string | null
+          escalation_rejection_reason?: string | null
           first_response_at?: string | null
           guest_allowed?: boolean
           id?: string
           on_behalf_of_guest_id?: string | null
           parent_submission_id?: string | null
           priority?: Database["public"]["Enums"]["priority"] | null
+          rejection_reason?: string | null
           resolved_at?: string | null
           status?: Database["public"]["Enums"]["ticket_status"]
           subcategory?: string | null
@@ -278,13 +286,17 @@ export type Database = {
           department?: Database["public"]["Enums"]["department"] | null
           description?: string
           effective_role?: Database["public"]["Enums"]["effective_role"]
+          escalated_by?: string | null
           escalated_to?: string | null
+          escalation_reason?: string | null
+          escalation_rejection_reason?: string | null
           first_response_at?: string | null
           guest_allowed?: boolean
           id?: string
           on_behalf_of_guest_id?: string | null
           parent_submission_id?: string | null
           priority?: Database["public"]["Enums"]["priority"] | null
+          rejection_reason?: string | null
           resolved_at?: string | null
           status?: Database["public"]["Enums"]["ticket_status"]
           subcategory?: string | null
