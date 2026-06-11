@@ -72,7 +72,7 @@ export const getReport = createServerFn({ method: "POST" })
       .select("*")
       .gte("created_at", data.from)
       .lte("created_at", data.to);
-    if (data.department && data.department !== "all") q = q.eq("department", data.department);
+    if (data.department && data.department !== "all") q = q.eq("department", data.department as "IT" | "HR" | "Finance" | "Operations");
     const { data: rows } = await q;
     const tickets = rows ?? [];
 
