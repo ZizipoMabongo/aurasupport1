@@ -193,9 +193,9 @@ export const listAllTickets = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     let q = supabaseAdmin.from("tickets").select("*").order("created_at", { ascending: false });
-    if (data.department && data.department !== "all") q = q.eq("department", data.department);
-    if (data.priority && data.priority !== "all") q = q.eq("priority", data.priority);
-    if (data.status && data.status !== "all") q = q.eq("status", data.status);
+    if (data.department && data.department !== "all") q = q.eq("department", data.department as "IT" | "HR" | "Finance" | "Operations");
+    if (data.priority && data.priority !== "all") q = q.eq("priority", data.priority as "Low" | "Medium" | "High" | "Urgent");
+    if (data.status && data.status !== "all") q = q.eq("status", data.status as "New" | "Needs Review" | "In Progress" | "Escalated" | "Resolved" | "Rejected");
     if (data.scope === "mine") q = q.eq("assigned_to", context.userId);
     if (data.scope === "escalated") q = q.eq("status", "Escalated");
     if (data.scope === "guest") q = q.eq("effective_role", "guest");
