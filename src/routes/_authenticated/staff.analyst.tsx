@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { listAllTickets } from "@/lib/tickets.functions";
-import { getAnalytics } from "@/lib/analytics.functions";
+
 import { Card } from "@/components/ui/card";
 import { TicketList } from "@/components/ticket-list";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
