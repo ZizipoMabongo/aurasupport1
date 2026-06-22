@@ -224,7 +224,7 @@ export const generatePrediction = createServerFn({ method: "POST" })
       explanation: "Forecast uses 60-day history with EWMA level estimation and day-of-week seasonality. SLA risk compares projected daily volume against 14-day resolution throughput per department.",
     });
 
-    await { writeAudit }.writeAudit(supabaseAdmin, {
+    await writeAudit(supabaseAdmin, {
       actor_kind: roles.includes("admin") ? "admin" : "analyst",
       actor_user_id: context.userId,
       actor_name: actorName,
