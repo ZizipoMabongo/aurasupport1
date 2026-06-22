@@ -14,6 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { toast } from "sonner";
 import { AnalyticsPanel } from "@/components/analytics-panel";
 import { ReportPanel } from "@/components/report-panel";
+import { PredictionsPanel } from "@/components/predictions-panel";
+import { CompliancePanel } from "@/components/compliance-panel";
 import { Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/staff/admin")({
