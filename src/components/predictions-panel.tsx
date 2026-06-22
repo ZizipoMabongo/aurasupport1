@@ -55,7 +55,7 @@ export function PredictionsPanel() {
   const generate = async () => {
     setBusy(true);
     try {
-      const p = (await gen({ data: { horizon_days: parseInt(horizon, 10) } })) as Prediction;
+      const p = (await gen({ data: { horizon_days: parseInt(horizon, 10) } })) as unknown as Prediction;
       setCurrent(p);
       await load();
       toast.success("Forecast generated");
