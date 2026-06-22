@@ -484,11 +484,21 @@ export const generateAIDraft = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { logAiDecision } = await import("./ai-risk.server");
     const { data: t } = await supabaseAdmin
       .from("tickets")
-      .select("description, department")
+      .select("id, description, department")
       .eq("id", data.ticket_id)
       .maybeSingle();
     if (!t) throw new Error("Not found");
-    return { draft: await aiDraftResponse(t.description, t.department ?? "Operations") };
+    const draft = await aiDraftResponse(t.description, t.department ?? "Operations");
+    await logAiDecision(supabaseAdmin, {
+      decision_type: "response",
+      ticket_id: t.id,
+      confidence: 0.8,
+      input_summary: t.description.slice(0, 500),
+      output_summary: draft.slice(0, 800),
+      explanation: `AI drafted a concierge-style response for the ${t.department ?? "Operations"} team. Reviewer must approve or edit before sending to the guest.`,
+    });
+    return { draft };
   });
