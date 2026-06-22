@@ -147,6 +147,7 @@ export const submitTicket = createServerFn({ method: "POST" })
       throw new Error("Could not create ticket");
     }
 
+    const { logAiDecision } = await import("./ai-risk.server");
     for (const t of created ?? []) {
       await writeAudit(supabaseAdmin, {
         ticket_id: t.id,
@@ -163,6 +164,16 @@ export const submitTicket = createServerFn({ method: "POST" })
           split: accepted.length > 1,
         },
       });
+      if (t.ai_classified) {
+        await logAiDecision(supabaseAdmin, {
+          decision_type: "classification",
+          ticket_id: t.id,
+          confidence: Number(t.confidence ?? 0),
+          input_summary: data.description.slice(0, 500),
+          output_summary: `Routed to ${t.department} / ${t.subcategory}, priority ${t.priority}. Guest-allowed: ${t.guest_allowed}.`,
+          explanation: `AI parsed the submission, identified the issue type, and matched it to the ${t.department} department based on keywords and context. Priority assigned by severity language.`,
+        });
+      }
     }
 
     return {
