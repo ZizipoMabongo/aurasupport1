@@ -46,7 +46,7 @@ export function PredictionsPanel() {
   const list = useServerFn(listPredictions);
 
   const load = async () => {
-    const rows = (await list({ data: undefined as never })) as Prediction[];
+    const rows = (await list({ data: undefined as never })) as unknown as Prediction[];
     setHistory(rows);
     if (rows.length && !current) setCurrent(rows[0]);
   };
