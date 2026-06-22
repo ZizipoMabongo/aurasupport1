@@ -193,6 +193,11 @@ export const generatePrediction = createServerFn({ method: "POST" })
     const { data: prof } = await supabaseAdmin.from("profiles").select("full_name").eq("id", context.userId).maybeSingle();
     const actorName = prof?.full_name ?? "Staff";
 
+    const forecastPayload = JSON.parse(JSON.stringify({
+      overall: { history: overallSeries, forecast: overallForecast },
+      departments: deptForecasts,
+    }));
+    const slaRiskPayload = JSON.parse(JSON.stringify(slaRiskSummary));
     const { data: inserted, error } = await supabaseAdmin
       .from("predictions")
       .insert({
@@ -201,9 +206,9 @@ export const generatePrediction = createServerFn({ method: "POST" })
         horizon_days: data.horizon_days,
         history_days: HISTORY_DAYS,
         total_history: tickets.length,
-        forecast: { overall: { history: overallSeries, forecast: overallForecast }, departments: deptForecasts },
+        forecast: forecastPayload,
         confidence: overallConfidence,
-        sla_risk: slaRiskSummary,
+        sla_risk: slaRiskPayload,
         notes: surgeDays.length ? `Possible surge: ${surgeDays.join(", ")}` : null,
       })
       .select("*")
