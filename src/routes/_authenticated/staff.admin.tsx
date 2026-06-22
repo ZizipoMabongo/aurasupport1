@@ -43,6 +43,8 @@ function AdminDashboard() {
         <TabsTrigger value="users">Manage staff</TabsTrigger>
         <TabsTrigger value="reports">Reports</TabsTrigger>
         <TabsTrigger value="analytics">Analytics</TabsTrigger>
+        <TabsTrigger value="predictions">Predictions</TabsTrigger>
+        <TabsTrigger value="compliance">AI Compliance</TabsTrigger>
       </TabsList>
       <TabsContent value="escalated" className="mt-4">
         <TicketList tickets={escalated} basePath="/staff/ticket" empty="No escalations at the moment." />
@@ -58,6 +60,12 @@ function AdminDashboard() {
       </TabsContent>
       <TabsContent value="analytics" className="mt-4">
         <AnalyticsPanel />
+      </TabsContent>
+      <TabsContent value="predictions" className="mt-4">
+        <PredictionsPanel />
+      </TabsContent>
+      <TabsContent value="compliance" className="mt-4">
+        <CompliancePanel />
       </TabsContent>
     </Tabs>
   );
