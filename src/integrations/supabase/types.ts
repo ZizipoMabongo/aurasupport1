@@ -14,6 +14,81 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_decisions: {
+        Row: {
+          confidence: number
+          created_at: string
+          decision_type: string
+          explanation: string | null
+          flags: Json
+          id: string
+          input_summary: string | null
+          model: string | null
+          needs_review: boolean
+          output_summary: string | null
+          prediction_id: string | null
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewed_by_name: string | null
+          reviewer_comment: string | null
+          ticket_id: string | null
+        }
+        Insert: {
+          confidence?: number
+          created_at?: string
+          decision_type: string
+          explanation?: string | null
+          flags?: Json
+          id?: string
+          input_summary?: string | null
+          model?: string | null
+          needs_review?: boolean
+          output_summary?: string | null
+          prediction_id?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewed_by_name?: string | null
+          reviewer_comment?: string | null
+          ticket_id?: string | null
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          decision_type?: string
+          explanation?: string | null
+          flags?: Json
+          id?: string
+          input_summary?: string | null
+          model?: string | null
+          needs_review?: boolean
+          output_summary?: string | null
+          prediction_id?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewed_by_name?: string | null
+          reviewer_comment?: string | null
+          ticket_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_decisions_prediction_id_fkey"
+            columns: ["prediction_id"]
+            isOneToOne: false
+            referencedRelation: "predictions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_decisions_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -164,6 +239,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      predictions: {
+        Row: {
+          confidence: number
+          forecast: Json
+          generated_at: string
+          generated_by: string | null
+          generated_by_name: string | null
+          history_days: number
+          horizon_days: number
+          id: string
+          notes: string | null
+          sla_risk: Json
+          total_history: number
+        }
+        Insert: {
+          confidence?: number
+          forecast?: Json
+          generated_at?: string
+          generated_by?: string | null
+          generated_by_name?: string | null
+          history_days?: number
+          horizon_days?: number
+          id?: string
+          notes?: string | null
+          sla_risk?: Json
+          total_history?: number
+        }
+        Update: {
+          confidence?: number
+          forecast?: Json
+          generated_at?: string
+          generated_by?: string | null
+          generated_by_name?: string | null
+          history_days?: number
+          horizon_days?: number
+          id?: string
+          notes?: string | null
+          sla_risk?: Json
+          total_history?: number
+        }
+        Relationships: []
       }
       profiles: {
         Row: {

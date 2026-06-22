@@ -14,6 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { toast } from "sonner";
 import { AnalyticsPanel } from "@/components/analytics-panel";
 import { ReportPanel } from "@/components/report-panel";
+import { PredictionsPanel } from "@/components/predictions-panel";
+import { CompliancePanel } from "@/components/compliance-panel";
 import { Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/staff/admin")({
@@ -41,6 +43,8 @@ function AdminDashboard() {
         <TabsTrigger value="users">Manage staff</TabsTrigger>
         <TabsTrigger value="reports">Reports</TabsTrigger>
         <TabsTrigger value="analytics">Analytics</TabsTrigger>
+        <TabsTrigger value="predictions">Predictions</TabsTrigger>
+        <TabsTrigger value="compliance">AI Compliance</TabsTrigger>
       </TabsList>
       <TabsContent value="escalated" className="mt-4">
         <TicketList tickets={escalated} basePath="/staff/ticket" empty="No escalations at the moment." />
@@ -56,6 +60,12 @@ function AdminDashboard() {
       </TabsContent>
       <TabsContent value="analytics" className="mt-4">
         <AnalyticsPanel />
+      </TabsContent>
+      <TabsContent value="predictions" className="mt-4">
+        <PredictionsPanel />
+      </TabsContent>
+      <TabsContent value="compliance" className="mt-4">
+        <CompliancePanel />
       </TabsContent>
     </Tabs>
   );

@@ -147,6 +147,7 @@ export const submitTicket = createServerFn({ method: "POST" })
       throw new Error("Could not create ticket");
     }
 
+    const { logAiDecision } = await import("./ai-risk.server");
     for (const t of created ?? []) {
       await writeAudit(supabaseAdmin, {
         ticket_id: t.id,
@@ -163,6 +164,16 @@ export const submitTicket = createServerFn({ method: "POST" })
           split: accepted.length > 1,
         },
       });
+      if (t.ai_classified) {
+        await logAiDecision(supabaseAdmin, {
+          decision_type: "classification",
+          ticket_id: t.id,
+          confidence: Number(t.confidence ?? 0),
+          input_summary: data.description.slice(0, 500),
+          output_summary: `Routed to ${t.department} / ${t.subcategory}, priority ${t.priority}. Guest-allowed: ${t.guest_allowed}.`,
+          explanation: `AI parsed the submission, identified the issue type, and matched it to the ${t.department} department based on keywords and context. Priority assigned by severity language.`,
+        });
+      }
     }
 
     return {
@@ -473,11 +484,21 @@ export const generateAIDraft = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { logAiDecision } = await import("./ai-risk.server");
     const { data: t } = await supabaseAdmin
       .from("tickets")
-      .select("description, department")
+      .select("id, description, department")
       .eq("id", data.ticket_id)
       .maybeSingle();
     if (!t) throw new Error("Not found");
-    return { draft: await aiDraftResponse(t.description, t.department ?? "Operations") };
+    const draft = await aiDraftResponse(t.description, t.department ?? "Operations");
+    await logAiDecision(supabaseAdmin, {
+      decision_type: "response",
+      ticket_id: t.id,
+      confidence: 0.8,
+      input_summary: t.description.slice(0, 500),
+      output_summary: draft.slice(0, 800),
+      explanation: `AI drafted a concierge-style response for the ${t.department ?? "Operations"} team. Reviewer must approve or edit before sending to the guest.`,
+    });
+    return { draft };
   });
