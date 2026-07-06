@@ -17,6 +17,7 @@ import { ReportPanel } from "@/components/report-panel";
 import { PredictionsPanel } from "@/components/predictions-panel";
 import { CompliancePanel } from "@/components/compliance-panel";
 import { Trash2 } from "lucide-react";
+import { RoutingRulesPanel } from "@/components/routing-rules-panel";
 
 export const Route = createFileRoute("/_authenticated/staff/admin")({
   component: AdminDashboard,
@@ -41,6 +42,7 @@ function AdminDashboard() {
         <TabsTrigger value="escalated">Escalated <span className="ml-1 text-xs opacity-70">({escalated.length})</span></TabsTrigger>
         <TabsTrigger value="all">All tickets</TabsTrigger>
         <TabsTrigger value="users">Manage staff</TabsTrigger>
+        <TabsTrigger value="routing">Routing rules</TabsTrigger>
         <TabsTrigger value="reports">Reports</TabsTrigger>
         <TabsTrigger value="analytics">Analytics</TabsTrigger>
         <TabsTrigger value="predictions">Predictions</TabsTrigger>
@@ -54,6 +56,9 @@ function AdminDashboard() {
       </TabsContent>
       <TabsContent value="users" className="mt-4">
         <ManageStaff />
+      </TabsContent>
+      <TabsContent value="routing" className="mt-4">
+        <RoutingRulesPanel />
       </TabsContent>
       <TabsContent value="reports" className="mt-4">
         <ReportPanel />

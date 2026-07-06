@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { listAllTickets } from "@/lib/tickets.functions";
+import { heartbeatPresence } from "@/lib/routing.functions";
 
 import { Card } from "@/components/ui/card";
 import { TicketList } from "@/components/ticket-list";
@@ -20,6 +21,15 @@ function AnalystDashboard() {
   const [prio, setPrio] = useState("all");
   const [status, setStatus] = useState("all");
   const list = useServerFn(listAllTickets);
+  const heartbeat = useServerFn(heartbeatPresence);
+
+  useEffect(() => {
+    const tick = () => heartbeat({ data: { status: "online" } }).catch(() => {});
+    tick();
+    const iv = setInterval(tick, 60_000);
+    return () => clearInterval(iv);
+  }, [heartbeat]);
+
 
   const load = async () => {
     setLoading(true);

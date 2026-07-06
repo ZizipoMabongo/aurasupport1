@@ -148,6 +148,7 @@ export const submitTicket = createServerFn({ method: "POST" })
     }
 
     const { logAiDecision } = await import("./ai-risk.server");
+    const { routeTicket } = await import("./routing.server");
     for (const t of created ?? []) {
       await writeAudit(supabaseAdmin, {
         ticket_id: t.id,
@@ -173,6 +174,12 @@ export const submitTicket = createServerFn({ method: "POST" })
           output_summary: `Routed to ${t.department} / ${t.subcategory}, priority ${t.priority}. Guest-allowed: ${t.guest_allowed}.`,
           explanation: `AI parsed the submission, identified the issue type, and matched it to the ${t.department} department based on keywords and context. Priority assigned by severity language.`,
         });
+      }
+      // Automatic routing to best-fit analyst (or queue if none available)
+      try {
+        await routeTicket(supabaseAdmin, t.id);
+      } catch (err) {
+        console.error("[routing] failed for ticket", t.id, err);
       }
     }
 
