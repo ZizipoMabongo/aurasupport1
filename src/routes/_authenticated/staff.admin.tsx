@@ -57,6 +57,9 @@ function AdminDashboard() {
       <TabsContent value="users" className="mt-4">
         <ManageStaff />
       </TabsContent>
+      <TabsContent value="routing" className="mt-4">
+        <RoutingRulesPanel />
+      </TabsContent>
       <TabsContent value="reports" className="mt-4">
         <ReportPanel />
       </TabsContent>
