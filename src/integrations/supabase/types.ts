@@ -89,6 +89,104 @@ export type Database = {
           },
         ]
       }
+      analyst_presence: {
+        Row: {
+          last_seen_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          last_seen_at?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          last_seen_at?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      analyst_profiles: {
+        Row: {
+          created_at: string
+          department: Database["public"]["Enums"]["department"] | null
+          max_concurrent: number
+          skill_tags: string[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          department?: Database["public"]["Enums"]["department"] | null
+          max_concurrent?: number
+          skill_tags?: string[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          department?: Database["public"]["Enums"]["department"] | null
+          max_concurrent?: number
+          skill_tags?: string[]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      approval_tasks: {
+        Row: {
+          assigned_to: string | null
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_reason: string | null
+          id: string
+          reason: string | null
+          requested_by: string | null
+          status: string
+          task_type: string
+          ticket_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_reason?: string | null
+          id?: string
+          reason?: string | null
+          requested_by?: string | null
+          status?: string
+          task_type: string
+          ticket_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_reason?: string | null
+          id?: string
+          reason?: string | null
+          requested_by?: string | null
+          status?: string
+          task_type?: string
+          ticket_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "approval_tasks_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -126,6 +224,54 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "audit_log_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automation_events: {
+        Row: {
+          assigned_to: string | null
+          created_at: string
+          details: Json
+          event_type: string
+          id: string
+          matched_rule_id: string | null
+          reason: string | null
+          ticket_id: string | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          created_at?: string
+          details?: Json
+          event_type: string
+          id?: string
+          matched_rule_id?: string | null
+          reason?: string | null
+          ticket_id?: string | null
+        }
+        Update: {
+          assigned_to?: string | null
+          created_at?: string
+          details?: Json
+          event_type?: string
+          id?: string
+          matched_rule_id?: string | null
+          reason?: string | null
+          ticket_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_events_matched_rule_id_fkey"
+            columns: ["matched_rule_id"]
+            isOneToOne: false
+            referencedRelation: "routing_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_events_ticket_id_fkey"
             columns: ["ticket_id"]
             isOneToOne: false
             referencedRelation: "tickets"
@@ -303,6 +449,54 @@ export type Database = {
         }
         Relationships: []
       }
+      routing_rules: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          department: Database["public"]["Enums"]["department"]
+          id: string
+          is_active: boolean
+          keywords: string[]
+          name: string
+          preferred_analyst: string | null
+          priority_boost: Database["public"]["Enums"]["priority"] | null
+          required_skills: string[]
+          subcategory: string | null
+          updated_at: string
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          department: Database["public"]["Enums"]["department"]
+          id?: string
+          is_active?: boolean
+          keywords?: string[]
+          name: string
+          preferred_analyst?: string | null
+          priority_boost?: Database["public"]["Enums"]["priority"] | null
+          required_skills?: string[]
+          subcategory?: string | null
+          updated_at?: string
+          weight?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          department?: Database["public"]["Enums"]["department"]
+          id?: string
+          is_active?: boolean
+          keywords?: string[]
+          name?: string
+          preferred_analyst?: string | null
+          priority_boost?: Database["public"]["Enums"]["priority"] | null
+          required_skills?: string[]
+          subcategory?: string | null
+          updated_at?: string
+          weight?: number
+        }
+        Relationships: []
+      }
       ticket_responses: {
         Row: {
           author_user_id: string
@@ -354,11 +548,14 @@ export type Database = {
           first_response_at: string | null
           guest_allowed: boolean
           id: string
+          last_routed_at: string | null
           on_behalf_of_guest_id: string | null
           parent_submission_id: string | null
           priority: Database["public"]["Enums"]["priority"] | null
+          queued_at: string | null
           rejection_reason: string | null
           resolved_at: string | null
+          routing_attempts: number
           status: Database["public"]["Enums"]["ticket_status"]
           subcategory: string | null
           submitter_guest_id: string | null
@@ -382,11 +579,14 @@ export type Database = {
           first_response_at?: string | null
           guest_allowed?: boolean
           id?: string
+          last_routed_at?: string | null
           on_behalf_of_guest_id?: string | null
           parent_submission_id?: string | null
           priority?: Database["public"]["Enums"]["priority"] | null
+          queued_at?: string | null
           rejection_reason?: string | null
           resolved_at?: string | null
+          routing_attempts?: number
           status?: Database["public"]["Enums"]["ticket_status"]
           subcategory?: string | null
           submitter_guest_id?: string | null
@@ -410,11 +610,14 @@ export type Database = {
           first_response_at?: string | null
           guest_allowed?: boolean
           id?: string
+          last_routed_at?: string | null
           on_behalf_of_guest_id?: string | null
           parent_submission_id?: string | null
           priority?: Database["public"]["Enums"]["priority"] | null
+          queued_at?: string | null
           rejection_reason?: string | null
           resolved_at?: string | null
+          routing_attempts?: number
           status?: Database["public"]["Enums"]["ticket_status"]
           subcategory?: string | null
           submitter_guest_id?: string | null
@@ -463,6 +666,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      analyst_workload: { Args: { _user_id: string }; Returns: number }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
@@ -473,6 +677,15 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      is_analyst_online: { Args: { _user_id: string }; Returns: boolean }
+      pick_analyst_for_ticket: {
+        Args: {
+          _department: Database["public"]["Enums"]["department"]
+          _preferred?: string
+          _required_skills: string[]
+        }
+        Returns: string
       }
     }
     Enums: {
