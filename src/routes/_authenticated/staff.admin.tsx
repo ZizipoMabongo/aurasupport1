@@ -17,6 +17,7 @@ import { ReportPanel } from "@/components/report-panel";
 import { PredictionsPanel } from "@/components/predictions-panel";
 import { CompliancePanel } from "@/components/compliance-panel";
 import { Trash2 } from "lucide-react";
+import { RoutingRulesPanel } from "@/components/routing-rules-panel";
 
 export const Route = createFileRoute("/_authenticated/staff/admin")({
   component: AdminDashboard,
