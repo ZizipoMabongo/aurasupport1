@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { listAllTickets } from "@/lib/tickets.functions";
+import { heartbeatPresence } from "@/lib/routing.functions";
 
 import { Card } from "@/components/ui/card";
 import { TicketList } from "@/components/ticket-list";
