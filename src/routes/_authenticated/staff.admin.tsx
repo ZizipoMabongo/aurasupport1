@@ -42,6 +42,7 @@ function AdminDashboard() {
         <TabsTrigger value="escalated">Escalated <span className="ml-1 text-xs opacity-70">({escalated.length})</span></TabsTrigger>
         <TabsTrigger value="all">All tickets</TabsTrigger>
         <TabsTrigger value="users">Manage staff</TabsTrigger>
+        <TabsTrigger value="routing">Routing rules</TabsTrigger>
         <TabsTrigger value="reports">Reports</TabsTrigger>
         <TabsTrigger value="analytics">Analytics</TabsTrigger>
         <TabsTrigger value="predictions">Predictions</TabsTrigger>
