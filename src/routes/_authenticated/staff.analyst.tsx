@@ -21,6 +21,15 @@ function AnalystDashboard() {
   const [prio, setPrio] = useState("all");
   const [status, setStatus] = useState("all");
   const list = useServerFn(listAllTickets);
+  const heartbeat = useServerFn(heartbeatPresence);
+
+  useEffect(() => {
+    const tick = () => heartbeat({ data: { status: "online" } }).catch(() => {});
+    tick();
+    const iv = setInterval(tick, 60_000);
+    return () => clearInterval(iv);
+  }, [heartbeat]);
+
 
   const load = async () => {
     setLoading(true);
