@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { Bell } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
 import { listMyNotifications, markNotificationRead } from "@/lib/notifications.functions";
@@ -41,9 +44,18 @@ export function NotificationBell() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${session.user_id}` },
-        () => load(),
+        (payload) => {
+          const n = payload.new as { message: string; ticket_id: string | null };
+          toast(n.message, {
+            action: n.ticket_id
+              ? { label: "Open", onClick: () => { window.location.href = `/staff/ticket/${n.ticket_id}`; } }
+              : undefined,
+          });
+          load();
+        },
       )
       .subscribe();
+
     return () => {
       supabase.removeChannel(ch);
     };
@@ -82,15 +94,26 @@ export function NotificationBell() {
           {items.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">No notifications yet</div>
           ) : (
-            items.map((n) => (
-              <div
-                key={n.id}
-                className={`border-b px-3 py-2 text-sm ${n.read ? "" : "bg-primary/5"}`}
-              >
-                <p className="font-medium">{n.message}</p>
-                <p className="text-xs text-muted-foreground">{rel(n.created_at)}</p>
-              </div>
-            ))
+            items.map((n) =>
+              n.ticket_id ? (
+                <Link
+                  key={n.id}
+                  to="/staff/ticket/$id"
+                  params={{ id: n.ticket_id }}
+                  onClick={() => mark({ data: { id: n.id } }).then(load)}
+                  className={`block border-b px-3 py-2 text-sm hover:bg-accent ${n.read ? "" : "bg-primary/5"}`}
+                >
+                  <p className="font-medium">{n.message}</p>
+                  <p className="text-xs text-muted-foreground">{rel(n.created_at)}</p>
+                </Link>
+              ) : (
+                <div key={n.id} className={`border-b px-3 py-2 text-sm ${n.read ? "" : "bg-primary/5"}`}>
+                  <p className="font-medium">{n.message}</p>
+                  <p className="text-xs text-muted-foreground">{rel(n.created_at)}</p>
+                </div>
+              ),
+            )
+
           )}
         </div>
       </PopoverContent>

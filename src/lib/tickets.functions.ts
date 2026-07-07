@@ -300,6 +300,7 @@ export const respondTicket = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { notify } = await import("./notify.server");
     const { data: prof } = await supabaseAdmin.from("profiles").select("full_name").eq("id", context.userId).maybeSingle();
     const { data: roleRow } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", context.userId).maybeSingle();
     const role = roleRow?.role ?? "analyst";
@@ -324,8 +325,30 @@ export const respondTicket = createServerFn({ method: "POST" })
       actor_name: prof?.full_name ?? "Staff",
       action: data.is_internal_note ? "ticket.note_added" : "ticket.responded",
     });
+    // Notify the crew submitter (if any) of a new public response
+    if (!data.is_internal_note) {
+      const { data: t } = await supabaseAdmin
+        .from("tickets")
+        .select("submitter_user_id, assigned_to, ticket_number")
+        .eq("id", data.ticket_id)
+        .maybeSingle();
+      if (t) {
+        const recipients = new Set<string>();
+        if (t.submitter_user_id && t.submitter_user_id !== context.userId) recipients.add(t.submitter_user_id);
+        if (t.assigned_to && t.assigned_to !== context.userId) recipients.add(t.assigned_to);
+        for (const uid of recipients) {
+          await notify(supabaseAdmin, {
+            user_id: uid,
+            type: "ticket_response",
+            message: `New response on ticket ${t.ticket_number} from ${prof?.full_name ?? "Staff"}.`,
+            ticket_id: data.ticket_id,
+          });
+        }
+      }
+    }
     return { ok: true };
   });
+
 
 export const resolveTicket = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -334,31 +357,82 @@ export const resolveTicket = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { notify } = await import("./notify.server");
     const { data: prof } = await supabaseAdmin.from("profiles").select("full_name").eq("id", context.userId).maybeSingle();
     const { data: roleRow } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", context.userId).maybeSingle();
     const role = (roleRow?.role ?? "analyst") as "crew" | "analyst" | "admin";
 
     const { data: t } = await supabaseAdmin
       .from("tickets")
-      .select("status, escalated_by, escalated_to")
+      .select("status, escalated_by, escalated_to, submitter_user_id, submitter_type, on_behalf_of_guest_id, assigned_to, ticket_number")
       .eq("id", data.ticket_id)
       .maybeSingle();
     if (!t) throw new Error("Ticket not found");
     if (t.status === "Resolved" || t.status === "Rejected") throw new Error("Ticket already closed");
 
     if (role === "admin") {
-      // Admins may only resolve tickets that were escalated to them
       if (t.status !== "Escalated" && t.escalated_to !== context.userId) {
         throw new Error("Admins can only resolve escalated tickets");
       }
     } else if (role === "analyst") {
-      // An analyst cannot resolve a ticket they themselves escalated, unless the escalation was rejected (escalated_by cleared)
       if (t.escalated_by && t.escalated_by === context.userId) {
         throw new Error("You escalated this ticket — only the admin can resolve it, unless the escalation is rejected back to you.");
       }
       if (t.status === "Escalated") {
         throw new Error("This ticket is currently escalated to the admin.");
       }
+    }
+
+    const actorName = prof?.full_name ?? "Staff";
+
+    const needsCrewApproval =
+      t.submitter_type === "staff" &&
+      !t.on_behalf_of_guest_id &&
+      t.submitter_user_id &&
+      t.submitter_user_id !== context.userId;
+
+    if (needsCrewApproval) {
+      const { data: existing } = await supabaseAdmin
+        .from("approval_tasks")
+        .select("id")
+        .eq("ticket_id", data.ticket_id)
+        .eq("task_type", "resolution_approval")
+        .eq("status", "pending")
+        .maybeSingle();
+      if (!existing) {
+        await supabaseAdmin.from("approval_tasks").insert({
+          ticket_id: data.ticket_id,
+          task_type: "resolution_approval",
+          requested_by: context.userId,
+          assigned_to: t.submitter_user_id,
+          status: "pending",
+          reason: `${actorName} proposes closing this ticket.`,
+        });
+      }
+      await supabaseAdmin
+        .from("tickets")
+        .update({ status: "Needs Review" })
+        .eq("id", data.ticket_id);
+      await supabaseAdmin.from("chat_messages").insert({
+        ticket_id: data.ticket_id,
+        sender_kind: "system",
+        sender_name: "System",
+        body: `${actorName} proposed closing this ticket. Awaiting requester approval (auto-approves in 2 hours).`,
+      });
+      await notify(supabaseAdmin, {
+        user_id: t.submitter_user_id,
+        type: "approval_requested",
+        message: `Approval needed to close ticket ${t.ticket_number}. Auto-approves in 2h.`,
+        ticket_id: data.ticket_id,
+      });
+      await writeAudit(supabaseAdmin, {
+        ticket_id: data.ticket_id,
+        actor_kind: role as "analyst" | "admin",
+        actor_user_id: context.userId,
+        actor_name: actorName,
+        action: "resolution.approval_requested",
+      });
+      return { ok: true, pendingApproval: true };
     }
 
     const { error } = await supabaseAdmin
@@ -370,11 +444,20 @@ export const resolveTicket = createServerFn({ method: "POST" })
       ticket_id: data.ticket_id,
       actor_kind: role as "analyst" | "admin",
       actor_user_id: context.userId,
-      actor_name: prof?.full_name ?? "Staff",
+      actor_name: actorName,
       action: "ticket.resolved",
     });
-    return { ok: true };
+    if (t.submitter_user_id && t.submitter_user_id !== context.userId) {
+      await notify(supabaseAdmin, {
+        user_id: t.submitter_user_id,
+        type: "ticket_resolved",
+        message: `Ticket ${t.ticket_number} was resolved by ${actorName}.`,
+        ticket_id: data.ticket_id,
+      });
+    }
+    return { ok: true, pendingApproval: false };
   });
+
 
 export const rejectTicket = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -444,8 +527,28 @@ export const escalateTicket = createServerFn({ method: "POST" })
       action: "ticket.escalated",
       details: { reason: data.reason },
     });
+    // Notify all admins
+    const { notify } = await import("./notify.server");
+    const { data: admins } = await supabaseAdmin
+      .from("user_roles")
+      .select("user_id")
+      .eq("role", "admin");
+    const { data: tRow } = await supabaseAdmin
+      .from("tickets")
+      .select("ticket_number")
+      .eq("id", data.ticket_id)
+      .maybeSingle();
+    for (const a of admins ?? []) {
+      await notify(supabaseAdmin, {
+        user_id: a.user_id,
+        type: "ticket_escalated",
+        message: `Ticket ${tRow?.ticket_number ?? ""} escalated by ${prof?.full_name ?? "Analyst"}.`,
+        ticket_id: data.ticket_id,
+      });
+    }
     return { ok: true };
   });
+
 
 export const rejectEscalation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -481,8 +584,22 @@ export const rejectEscalation = createServerFn({ method: "POST" })
       action: "escalation.rejected",
       details: { reason: data.reason },
     });
+    // Notify the analyst who originally escalated
+    const { notify } = await import("./notify.server");
+    const { data: t } = await supabaseAdmin
+      .from("tickets")
+      .select("assigned_to, ticket_number")
+      .eq("id", data.ticket_id)
+      .maybeSingle();
+    await notify(supabaseAdmin, {
+      user_id: t?.assigned_to ?? null,
+      type: "escalation_rejected",
+      message: `Escalation on ${t?.ticket_number ?? "ticket"} rejected: ${data.reason}`,
+      ticket_id: data.ticket_id,
+    });
     return { ok: true };
   });
+
 
 export const generateAIDraft = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

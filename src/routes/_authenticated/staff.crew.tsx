@@ -5,8 +5,10 @@ import { listAllTickets } from "@/lib/tickets.functions";
 import { Card } from "@/components/ui/card";
 import { SubmitTicketForm } from "@/components/submit-ticket-form";
 import { TicketList } from "@/components/ticket-list";
+import { ApprovalsPanel } from "@/components/approvals-panel";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useSession } from "@/hooks/use-session";
+
 
 export const Route = createFileRoute("/_authenticated/staff/crew")({
   component: CrewDashboard,
@@ -47,6 +49,7 @@ function CrewDashboard() {
           <TabsList>
             <TabsTrigger value="mine">My Requests</TabsTrigger>
             <TabsTrigger value="guest">Guest Requests</TabsTrigger>
+            <TabsTrigger value="approvals">Approvals</TabsTrigger>
           </TabsList>
           <TabsContent value="mine" className="mt-4">
             {loading ? (
@@ -62,7 +65,11 @@ function CrewDashboard() {
               <TicketList tickets={guestSubs} basePath="/staff/ticket" empty="No guest requests submitted on behalf." />
             )}
           </TabsContent>
+          <TabsContent value="approvals" className="mt-4">
+            <ApprovalsPanel />
+          </TabsContent>
         </Tabs>
+
       </div>
     </div>
   );
