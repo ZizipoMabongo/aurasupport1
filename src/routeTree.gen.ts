@@ -20,6 +20,7 @@ import { Route as GuestTicketIdRouteImport } from './routes/guest.ticket.$id'
 import { Route as AuthenticatedStaffCrewRouteImport } from './routes/_authenticated/staff.crew'
 import { Route as AuthenticatedStaffAnalystRouteImport } from './routes/_authenticated/staff.analyst'
 import { Route as AuthenticatedStaffAdminRouteImport } from './routes/_authenticated/staff.admin'
+import { Route as ApiPublicHooksAutoApproveRouteImport } from './routes/api/public/hooks/auto-approve'
 import { Route as AuthenticatedStaffTicketIdRouteImport } from './routes/_authenticated/staff.ticket.$id'
 
 const GuestLoginRoute = GuestLoginRouteImport.update({
@@ -77,6 +78,12 @@ const AuthenticatedStaffAdminRoute = AuthenticatedStaffAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AuthenticatedStaffRoute,
 } as any)
+const ApiPublicHooksAutoApproveRoute =
+  ApiPublicHooksAutoApproveRouteImport.update({
+    id: '/api/public/hooks/auto-approve',
+    path: '/api/public/hooks/auto-approve',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthenticatedStaffTicketIdRoute =
   AuthenticatedStaffTicketIdRouteImport.update({
     id: '/ticket/$id',
@@ -96,6 +103,7 @@ export interface FileRoutesByFullPath {
   '/staff/crew': typeof AuthenticatedStaffCrewRoute
   '/guest/ticket/$id': typeof GuestTicketIdRoute
   '/staff/ticket/$id': typeof AuthenticatedStaffTicketIdRoute
+  '/api/public/hooks/auto-approve': typeof ApiPublicHooksAutoApproveRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -108,6 +116,7 @@ export interface FileRoutesByTo {
   '/staff/crew': typeof AuthenticatedStaffCrewRoute
   '/guest/ticket/$id': typeof GuestTicketIdRoute
   '/staff/ticket/$id': typeof AuthenticatedStaffTicketIdRoute
+  '/api/public/hooks/auto-approve': typeof ApiPublicHooksAutoApproveRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -123,6 +132,7 @@ export interface FileRoutesById {
   '/_authenticated/staff/crew': typeof AuthenticatedStaffCrewRoute
   '/guest/ticket/$id': typeof GuestTicketIdRoute
   '/_authenticated/staff/ticket/$id': typeof AuthenticatedStaffTicketIdRoute
+  '/api/public/hooks/auto-approve': typeof ApiPublicHooksAutoApproveRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -138,6 +148,7 @@ export interface FileRouteTypes {
     | '/staff/crew'
     | '/guest/ticket/$id'
     | '/staff/ticket/$id'
+    | '/api/public/hooks/auto-approve'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -150,6 +161,7 @@ export interface FileRouteTypes {
     | '/staff/crew'
     | '/guest/ticket/$id'
     | '/staff/ticket/$id'
+    | '/api/public/hooks/auto-approve'
   id:
     | '__root__'
     | '/'
@@ -164,6 +176,7 @@ export interface FileRouteTypes {
     | '/_authenticated/staff/crew'
     | '/guest/ticket/$id'
     | '/_authenticated/staff/ticket/$id'
+    | '/api/public/hooks/auto-approve'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -172,6 +185,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   GuestRoute: typeof GuestRouteWithChildren
   GuestLoginRoute: typeof GuestLoginRoute
+  ApiPublicHooksAutoApproveRoute: typeof ApiPublicHooksAutoApproveRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -253,6 +267,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedStaffAdminRouteImport
       parentRoute: typeof AuthenticatedStaffRoute
     }
+    '/api/public/hooks/auto-approve': {
+      id: '/api/public/hooks/auto-approve'
+      path: '/api/public/hooks/auto-approve'
+      fullPath: '/api/public/hooks/auto-approve'
+      preLoaderRoute: typeof ApiPublicHooksAutoApproveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/staff/ticket/$id': {
       id: '/_authenticated/staff/ticket/$id'
       path: '/ticket/$id'
@@ -309,6 +330,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   GuestRoute: GuestRouteWithChildren,
   GuestLoginRoute: GuestLoginRoute,
+  ApiPublicHooksAutoApproveRoute: ApiPublicHooksAutoApproveRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
