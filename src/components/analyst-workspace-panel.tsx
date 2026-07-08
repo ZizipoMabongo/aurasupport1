@@ -14,7 +14,7 @@ export function AnalystWorkspacePanel() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([workloadFn({}), queueFn({})])
+    Promise.all([workloadFn(), queueFn()])
       .then(([w, q]) => {
         setWorkload(w as any[]);
         setQueue(q as any[]);
