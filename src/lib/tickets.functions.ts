@@ -149,7 +149,19 @@ export const submitTicket = createServerFn({ method: "POST" })
 
     const { logAiDecision } = await import("./ai-risk.server");
     const { routeTicket } = await import("./routing.server");
+    const { assessRisk } = await import("./risk-detect.server");
+    const { notify } = await import("./notify.server");
     for (const t of created ?? []) {
+      const risk = assessRisk(`${data.description} ${t.description}`, {
+        description: t.description,
+        department: t.department as never,
+        subcategory: t.subcategory ?? "",
+        priority: (t.priority ?? "Medium") as never,
+        confidence: Number(t.confidence ?? 0),
+        guest_allowed: t.guest_allowed,
+        ai_classified: t.ai_classified,
+      });
+
       await writeAudit(supabaseAdmin, {
         ticket_id: t.id,
         actor_kind: actorKind,
@@ -163,6 +175,7 @@ export const submitTicket = createServerFn({ method: "POST" })
           ai_classified: t.ai_classified,
           confidence: t.confidence,
           split: accepted.length > 1,
+          risk_flags: risk.reasons,
         },
       });
       if (t.ai_classified) {
@@ -175,6 +188,42 @@ export const submitTicket = createServerFn({ method: "POST" })
           explanation: `AI parsed the submission, identified the issue type, and matched it to the ${t.department} department based on keywords and context. Priority assigned by severity language.`,
         });
       }
+
+      // High-risk auto-escalation: bypass analyst routing, go straight to admin.
+      if (risk.isHighRisk) {
+        const reasonText = `Auto-escalated: high-risk signals detected (${risk.reasons.join(", ")}).`;
+        await supabaseAdmin
+          .from("tickets")
+          .update({ status: "Escalated", priority: "Urgent", escalation_reason: reasonText })
+          .eq("id", t.id);
+        await supabaseAdmin.from("chat_messages").insert({
+          ticket_id: t.id,
+          sender_kind: "system",
+          sender_name: "System",
+          body: reasonText + " An administrator will take over shortly.",
+        });
+        await writeAudit(supabaseAdmin, {
+          ticket_id: t.id,
+          actor_kind: "system",
+          actor_name: "Risk Engine",
+          action: "ticket.auto_escalated",
+          details: { reasons: risk.reasons },
+        });
+        const { data: admins } = await supabaseAdmin
+          .from("user_roles")
+          .select("user_id")
+          .eq("role", "admin");
+        for (const a of admins ?? []) {
+          await notify(supabaseAdmin, {
+            user_id: a.user_id,
+            type: "ticket_escalated",
+            message: `High-risk ticket ${t.ticket_number} auto-escalated (${risk.reasons.join(", ")}).`,
+            ticket_id: t.id,
+          });
+        }
+        continue;
+      }
+
       // Automatic routing to best-fit analyst (or queue if none available)
       try {
         await routeTicket(supabaseAdmin, t.id);

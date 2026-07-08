@@ -9,6 +9,7 @@ import { TicketList } from "@/components/ticket-list";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AnalyticsPanel } from "@/components/analytics-panel";
+import { AnalystWorkspacePanel } from "@/components/analyst-workspace-panel";
 
 export const Route = createFileRoute("/_authenticated/staff/analyst")({
   component: AnalystDashboard,
@@ -50,6 +51,7 @@ function AnalystDashboard() {
     <Tabs defaultValue="feed">
       <TabsList>
         <TabsTrigger value="feed">Live feed</TabsTrigger>
+        <TabsTrigger value="workspace">AI workspace</TabsTrigger>
         <TabsTrigger value="analytics">Analytics</TabsTrigger>
       </TabsList>
       <TabsContent value="feed" className="mt-4 space-y-4">
@@ -63,6 +65,9 @@ function AnalystDashboard() {
         ) : (
           <TicketList tickets={tickets} basePath="/staff/ticket" empty="No tickets match these filters." />
         )}
+      </TabsContent>
+      <TabsContent value="workspace" className="mt-4">
+        <AnalystWorkspacePanel />
       </TabsContent>
       <TabsContent value="analytics" className="mt-4">
         <AnalyticsPanel />

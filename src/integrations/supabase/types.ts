@@ -14,6 +14,62 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_classification_corrections: {
+        Row: {
+          corrected_by: string
+          corrected_by_name: string
+          created_at: string
+          id: string
+          new_department: string
+          new_priority: string
+          new_subcategory: string
+          original_confidence: number | null
+          original_department: string | null
+          original_priority: string | null
+          original_subcategory: string | null
+          reason: string | null
+          ticket_id: string
+        }
+        Insert: {
+          corrected_by: string
+          corrected_by_name: string
+          created_at?: string
+          id?: string
+          new_department: string
+          new_priority: string
+          new_subcategory: string
+          original_confidence?: number | null
+          original_department?: string | null
+          original_priority?: string | null
+          original_subcategory?: string | null
+          reason?: string | null
+          ticket_id: string
+        }
+        Update: {
+          corrected_by?: string
+          corrected_by_name?: string
+          created_at?: string
+          id?: string
+          new_department?: string
+          new_priority?: string
+          new_subcategory?: string
+          original_confidence?: number | null
+          original_department?: string | null
+          original_priority?: string | null
+          original_subcategory?: string | null
+          reason?: string | null
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_classification_corrections_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_decisions: {
         Row: {
           confidence: number

@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useSession } from "@/hooks/use-session";
 import { TicketChat } from "./ticket-chat";
+import { AiWorkspacePanel } from "./ai-workspace-panel";
 import { fmt, priorityClasses, statusClasses } from "@/lib/format";
 import { toast } from "sonner";
 import { AlertTriangle, Ban, CheckCircle2, MessageSquare, Sparkles, ShieldAlert, X } from "lucide-react";
@@ -398,7 +399,7 @@ export function TicketDetail({
         ) : null}
       </div>
 
-      {/* Right: chat */}
+      {/* Right: chat + AI workspace */}
       <div className="space-y-4">
         <Card className="p-0">
           <div className="p-3 border-b">
@@ -409,6 +410,13 @@ export function TicketDetail({
             <TicketChat ticketId={ticket.id} initialMessages={chat} />
           </div>
         </Card>
+        {isStaff && (isAnalyst || isAdmin) ? (
+          <AiWorkspacePanel
+            ticket={ticket}
+            canEdit={(isAnalyst && analystCanResolve) || (isAdmin && adminCanAct)}
+            onChange={onChange}
+          />
+        ) : null}
       </div>
 
       {/* Response modal — manual dismiss only */}
