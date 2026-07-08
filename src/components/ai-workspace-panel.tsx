@@ -57,7 +57,8 @@ export function AiWorkspacePanel({ ticket, canEdit, onChange }: Props) {
     return () => {
       alive = false;
     };
-  }, [ticket.id, getRelated, predict]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticket.id]);
 
   const handleReclassify = async () => {
     if (!sub.trim()) {

@@ -21,7 +21,8 @@ export function AnalystWorkspacePanel() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [workloadFn, queueFn]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
