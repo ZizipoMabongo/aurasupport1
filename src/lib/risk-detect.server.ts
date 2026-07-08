@@ -18,6 +18,8 @@ export interface RiskAssessment {
 export function assessRisk(text: string, classified: ClassifiedTicket): RiskAssessment {
   const reasons = new Set<string>();
   for (const p of RISK_PATTERNS) if (p.rx.test(text)) reasons.add(p.label);
-  if (classified.priority === "Urgent") reasons.add("urgent-priority");
-  return { isHighRisk: reasons.size > 0 && (reasons.size >= 2 || classified.priority === "Urgent" || Array.from(reasons).some((r) => r !== "urgent-priority")), reasons: Array.from(reasons) };
+  const hasKeyword = reasons.size > 0;
+  if (hasKeyword && classified.priority === "Urgent") reasons.add("urgent-priority");
+  // Auto-escalate only when a real risk keyword is present.
+  return { isHighRisk: hasKeyword, reasons: Array.from(reasons) };
 }
