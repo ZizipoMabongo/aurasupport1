@@ -244,17 +244,37 @@ export function SubmitTicketForm({
                       : `We've split your request into ${result.created.length} tickets.`}
                   </p>
                   <ul className="space-y-2">
-                    {result.created.map((t) => (
-                      <li key={t.id} className="rounded-md border p-3 text-sm bg-card">
-                        <div className="font-mono text-xs text-muted-foreground">{t.ticket_number}</div>
-                        <div className="mt-1">
-                          <span className="font-medium">{t.department}</span>
-                          {t.subcategory ? <span className="text-muted-foreground"> · {t.subcategory}</span> : null}
-                          {t.priority ? <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-secondary">{t.priority}</span> : null}
-                        </div>
-                      </li>
-                    ))}
+                    {result.created.map((t) => {
+                      const followUps = suggestedFollowUps(t.department);
+                      return (
+                        <li key={t.id} className="rounded-md border p-3 text-sm bg-card">
+                          <div className="font-mono text-xs text-muted-foreground">{t.ticket_number}</div>
+                          <div className="mt-1">
+                            <span className="font-medium">{t.department}</span>
+                            {t.subcategory ? <span className="text-muted-foreground"> · {t.subcategory}</span> : null}
+                            {t.priority ? <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-secondary">{t.priority}</span> : null}
+                          </div>
+                          <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Clock className="h-3.5 w-3.5" />
+                            Estimated first response {estimatedResponseWindow(t.priority)}.
+                          </div>
+                          {followUps.length > 0 ? (
+                            <div className="mt-2">
+                              <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">
+                                Anything else worth mentioning?
+                              </p>
+                              <ul className="list-disc pl-4 space-y-0.5 text-xs text-muted-foreground">
+                                {followUps.map((q, i) => (
+                                  <li key={i}>{q}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
+                        </li>
+                      );
+                    })}
                   </ul>
+
                 </div>
               ) : null}
 
