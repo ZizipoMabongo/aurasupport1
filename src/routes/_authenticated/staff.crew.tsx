@@ -42,7 +42,7 @@ function CrewDashboard() {
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="lg:col-span-1">
-        <SubmitTicketForm showOnBehalf={true} onSubmitted={load} />
+        <SubmitTicketForm showOnBehalf={true} onSubmitted={load} recentTickets={[...mine, ...guestSubs]} />
       </div>
       <div className="lg:col-span-2">
         <Tabs defaultValue="mine">
