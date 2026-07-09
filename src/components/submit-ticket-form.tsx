@@ -11,7 +11,8 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Search, X, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Search, X, AlertCircle, CheckCircle2, Clock, RotateCcw } from "lucide-react";
+import { estimatedResponseWindow, suggestedFollowUps } from "@/lib/format.eta";
 
 interface Guest {
   guest_id: string;
@@ -30,13 +31,24 @@ interface SubmissionResult {
   rejected: Array<{ department: string; subcategory: string; reason: string }>;
 }
 
+interface RecentTicket {
+  id: string;
+  ticket_number: string;
+  description: string;
+  department: string | null;
+  status: string;
+}
+
 export function SubmitTicketForm({
   onSubmitted,
   showOnBehalf,
+  recentTickets = [],
 }: {
   onSubmitted?: () => void;
   showOnBehalf: boolean; // crew only
+  recentTickets?: RecentTicket[];
 }) {
+
   const { session } = useSession();
   const [mode, setMode] = useState<"self" | "on_behalf_of_guest">("self");
   const [description, setDescription] = useState("");
@@ -162,6 +174,31 @@ export function SubmitTicketForm({
           </Tabs>
         ) : null}
 
+        {recentTickets.length > 0 ? (
+          <div className="mb-4">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+              Re-submit a similar request
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {recentTickets.slice(0, 3).map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setDescription(t.description)}
+                  className="inline-flex items-center gap-1 rounded-full border bg-secondary/60 hover:bg-secondary px-2.5 py-1 text-xs text-left max-w-full"
+                  title={t.description}
+                >
+                  <RotateCcw className="h-3 w-3 shrink-0" />
+                  <span className="truncate max-w-[220px]">
+                    {t.department ? `${t.department}: ` : ""}
+                    {t.description}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <Label htmlFor="desc" className="mb-2 block">Describe your request</Label>
         <Textarea
           id="desc"
@@ -175,6 +212,7 @@ export function SubmitTicketForm({
             {busy ? "Submitting..." : "Submit request"}
           </Button>
         </div>
+
       </Card>
 
       {/* Success/rejection modal — manual dismiss only */}
@@ -206,17 +244,37 @@ export function SubmitTicketForm({
                       : `We've split your request into ${result.created.length} tickets.`}
                   </p>
                   <ul className="space-y-2">
-                    {result.created.map((t) => (
-                      <li key={t.id} className="rounded-md border p-3 text-sm bg-card">
-                        <div className="font-mono text-xs text-muted-foreground">{t.ticket_number}</div>
-                        <div className="mt-1">
-                          <span className="font-medium">{t.department}</span>
-                          {t.subcategory ? <span className="text-muted-foreground"> · {t.subcategory}</span> : null}
-                          {t.priority ? <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-secondary">{t.priority}</span> : null}
-                        </div>
-                      </li>
-                    ))}
+                    {result.created.map((t) => {
+                      const followUps = suggestedFollowUps(t.department);
+                      return (
+                        <li key={t.id} className="rounded-md border p-3 text-sm bg-card">
+                          <div className="font-mono text-xs text-muted-foreground">{t.ticket_number}</div>
+                          <div className="mt-1">
+                            <span className="font-medium">{t.department}</span>
+                            {t.subcategory ? <span className="text-muted-foreground"> · {t.subcategory}</span> : null}
+                            {t.priority ? <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-secondary">{t.priority}</span> : null}
+                          </div>
+                          <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Clock className="h-3.5 w-3.5" />
+                            Estimated first response {estimatedResponseWindow(t.priority)}.
+                          </div>
+                          {followUps.length > 0 ? (
+                            <div className="mt-2">
+                              <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">
+                                Anything else worth mentioning?
+                              </p>
+                              <ul className="list-disc pl-4 space-y-0.5 text-xs text-muted-foreground">
+                                {followUps.map((q, i) => (
+                                  <li key={i}>{q}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
+                        </li>
+                      );
+                    })}
                   </ul>
+
                 </div>
               ) : null}
 

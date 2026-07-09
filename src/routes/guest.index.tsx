@@ -6,6 +6,7 @@ import { useSession } from "@/hooks/use-session";
 import { Card } from "@/components/ui/card";
 import { SubmitTicketForm } from "@/components/submit-ticket-form";
 import { TicketList } from "@/components/ticket-list";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/guest/")({
   component: GuestDashboard,
@@ -33,6 +34,30 @@ function GuestDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.kind === "guest" ? session.guest_id : null]);
 
+  // Realtime: refresh the list when any of this guest's tickets change.
+  useEffect(() => {
+    if (session?.kind !== "guest") return;
+    const gid = session.guest_id;
+    const ch = supabase
+      .channel(`guest-tickets-${gid}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tickets", filter: `submitter_guest_id=eq.${gid}` },
+        () => load(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tickets", filter: `on_behalf_of_guest_id=eq.${gid}` },
+        () => load(),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.kind === "guest" ? session.guest_id : null]);
+
+
   if (session?.kind !== "guest") return null;
 
   return (
@@ -57,7 +82,7 @@ function GuestDashboard() {
             </div>
           </div>
         </Card>
-        <SubmitTicketForm showOnBehalf={false} onSubmitted={load} />
+        <SubmitTicketForm showOnBehalf={false} onSubmitted={load} recentTickets={tickets} />
       </div>
       <div className="lg:col-span-2">
         <h2 className="text-lg font-semibold tracking-tight mb-3">Recent tickets</h2>
