@@ -174,6 +174,31 @@ export function SubmitTicketForm({
           </Tabs>
         ) : null}
 
+        {recentTickets.length > 0 ? (
+          <div className="mb-4">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+              Re-submit a similar request
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {recentTickets.slice(0, 3).map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setDescription(t.description)}
+                  className="inline-flex items-center gap-1 rounded-full border bg-secondary/60 hover:bg-secondary px-2.5 py-1 text-xs text-left max-w-full"
+                  title={t.description}
+                >
+                  <RotateCcw className="h-3 w-3 shrink-0" />
+                  <span className="truncate max-w-[220px]">
+                    {t.department ? `${t.department}: ` : ""}
+                    {t.description}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <Label htmlFor="desc" className="mb-2 block">Describe your request</Label>
         <Textarea
           id="desc"
@@ -187,6 +212,7 @@ export function SubmitTicketForm({
             {busy ? "Submitting..." : "Submit request"}
           </Button>
         </div>
+
       </Card>
 
       {/* Success/rejection modal — manual dismiss only */}
