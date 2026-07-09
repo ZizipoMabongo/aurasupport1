@@ -11,7 +11,8 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Search, X, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Search, X, AlertCircle, CheckCircle2, Clock, RotateCcw } from "lucide-react";
+import { estimatedResponseWindow, suggestedFollowUps } from "@/lib/format.eta";
 
 interface Guest {
   guest_id: string;
@@ -30,13 +31,24 @@ interface SubmissionResult {
   rejected: Array<{ department: string; subcategory: string; reason: string }>;
 }
 
+interface RecentTicket {
+  id: string;
+  ticket_number: string;
+  description: string;
+  department: string | null;
+  status: string;
+}
+
 export function SubmitTicketForm({
   onSubmitted,
   showOnBehalf,
+  recentTickets = [],
 }: {
   onSubmitted?: () => void;
   showOnBehalf: boolean; // crew only
+  recentTickets?: RecentTicket[];
 }) {
+
   const { session } = useSession();
   const [mode, setMode] = useState<"self" | "on_behalf_of_guest">("self");
   const [description, setDescription] = useState("");
