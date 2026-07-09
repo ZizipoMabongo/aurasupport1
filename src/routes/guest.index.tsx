@@ -82,7 +82,7 @@ function GuestDashboard() {
             </div>
           </div>
         </Card>
-        <SubmitTicketForm showOnBehalf={false} onSubmitted={load} />
+        <SubmitTicketForm showOnBehalf={false} onSubmitted={load} recentTickets={tickets} />
       </div>
       <div className="lg:col-span-2">
         <h2 className="text-lg font-semibold tracking-tight mb-3">Recent tickets</h2>
