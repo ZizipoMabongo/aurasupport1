@@ -1,10 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { listAllTickets } from "@/lib/tickets.functions";
 import { listStaff, createStaff, deleteStaff } from "@/lib/staff.functions";
 import { Card } from "@/components/ui/card";
-import { TicketList } from "@/components/ticket-list";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,41 +16,43 @@ import { PredictionsPanel } from "@/components/predictions-panel";
 import { CompliancePanel } from "@/components/compliance-panel";
 import { Trash2 } from "lucide-react";
 import { RoutingRulesPanel } from "@/components/routing-rules-panel";
+import { AdminOverviewPanel } from "@/components/admin-overview-panel";
+import { AdminTicketsPanel } from "@/components/admin-tickets-panel";
+import { AdminApprovalsPanel } from "@/components/admin-approvals-panel";
+import { AuditLogPanel } from "@/components/audit-log-panel";
 
 export const Route = createFileRoute("/_authenticated/staff/admin")({
   component: AdminDashboard,
 });
 
 function AdminDashboard() {
-  const [all, setAll] = useState<any[]>([]);
-  const list = useServerFn(listAllTickets);
-
-  const load = async () => {
-    const rows = await list({ data: {} });
-    setAll(rows as any[]);
-  };
-
-  useEffect(() => { load(); }, []);
-
-  const escalated = all.filter((t) => t.status === "Escalated");
-
   return (
-    <Tabs defaultValue="escalated">
+    <Tabs defaultValue="overview">
       <TabsList className="flex-wrap h-auto">
-        <TabsTrigger value="escalated">Escalated <span className="ml-1 text-xs opacity-70">({escalated.length})</span></TabsTrigger>
-        <TabsTrigger value="all">All tickets</TabsTrigger>
+        <TabsTrigger value="overview">Overview</TabsTrigger>
+        <TabsTrigger value="escalated">Escalated</TabsTrigger>
+        <TabsTrigger value="tickets">All tickets</TabsTrigger>
+        <TabsTrigger value="approvals">Approvals</TabsTrigger>
         <TabsTrigger value="users">Manage staff</TabsTrigger>
         <TabsTrigger value="routing">Routing rules</TabsTrigger>
         <TabsTrigger value="reports">Reports</TabsTrigger>
         <TabsTrigger value="analytics">Analytics</TabsTrigger>
         <TabsTrigger value="predictions">Predictions</TabsTrigger>
         <TabsTrigger value="compliance">AI Compliance</TabsTrigger>
+        <TabsTrigger value="audit">Audit log</TabsTrigger>
       </TabsList>
-      <TabsContent value="escalated" className="mt-4">
-        <TicketList tickets={escalated} basePath="/staff/ticket" empty="No escalations at the moment." />
+
+      <TabsContent value="overview" className="mt-4">
+        <AdminOverviewPanel />
       </TabsContent>
-      <TabsContent value="all" className="mt-4">
-        <TicketList tickets={all} basePath="/staff/ticket" empty="No tickets yet." />
+      <TabsContent value="escalated" className="mt-4">
+        <AdminTicketsPanel initialScope="escalated" />
+      </TabsContent>
+      <TabsContent value="tickets" className="mt-4">
+        <AdminTicketsPanel initialScope="all" />
+      </TabsContent>
+      <TabsContent value="approvals" className="mt-4">
+        <AdminApprovalsPanel />
       </TabsContent>
       <TabsContent value="users" className="mt-4">
         <ManageStaff />
@@ -71,6 +71,9 @@ function AdminDashboard() {
       </TabsContent>
       <TabsContent value="compliance" className="mt-4">
         <CompliancePanel />
+      </TabsContent>
+      <TabsContent value="audit" className="mt-4">
+        <AuditLogPanel />
       </TabsContent>
     </Tabs>
   );
@@ -147,13 +150,16 @@ function ManageStaff() {
         </Dialog>
       </div>
       <div className="space-y-2">
+        {rows.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-6">No staff members yet.</p>
+        )}
         {rows.map((r) => (
           <div key={r.id} className="flex items-center justify-between border rounded p-3 text-sm">
             <div>
               <p className="font-medium">{r.full_name}</p>
               <p className="text-xs text-muted-foreground">{r.email} · <span className="capitalize">{r.role ?? "no role"}</span></p>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => remove(r.id)}><Trash2 className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" onClick={() => remove(r.id)} aria-label={`Remove ${r.full_name}`}><Trash2 className="h-4 w-4" /></Button>
           </div>
         ))}
       </div>
