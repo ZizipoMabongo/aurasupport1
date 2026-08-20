@@ -1,0 +1,677 @@
+import { createServerFn } from "@tanstack/react-start";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { z } from "zod";
+import { classifySubmission, aiDraftResponse } from "./ai-classifier.server";
+import { writeAudit } from "./audit.server";
+
+const SubmitInput = z.object({
+  description: z.string().trim().min(5).max(2000),
+  // Who is submitting:
+  submitter: z.discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("guest"),
+      guest_id: z.string().min(1),
+    }),
+    z.object({
+      kind: z.literal("staff"),
+      mode: z.enum(["self", "on_behalf_of_guest"]),
+      on_behalf_of_guest_id: z.string().optional(),
+    }),
+  ]),
+});
+
+// PUBLIC submission endpoint (guests + staff both call it).
+// Staff path validates auth via the bearer token; guest path validates guest_id.
+export const submitTicket = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => SubmitInput.parse(input))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    let effectiveRole: "guest" | "crew";
+    let submitterType: "guest" | "staff";
+    let submitterGuestId: string | null = null;
+    let submitterUserId: string | null = null;
+    let onBehalfGuestId: string | null = null;
+    let actorKind: "guest" | "crew";
+    let actorUserId: string | null = null;
+    let actorGuestId: string | null = null;
+    let actorName = "";
+
+    if (data.submitter.kind === "guest") {
+      const gid = data.submitter.guest_id.toUpperCase();
+      const { data: g } = await supabaseAdmin
+        .from("guests")
+        .select("guest_id, full_name")
+        .eq("guest_id", gid)
+        .maybeSingle();
+      if (!g) throw new Error("Invalid guest");
+      submitterType = "guest";
+      submitterGuestId = gid;
+      effectiveRole = "guest";
+      actorKind = "guest";
+      actorGuestId = gid;
+      actorName = g.full_name;
+    } else {
+      // staff path — validate bearer token manually so this fn stays public-callable
+      // but staff submissions require auth
+      const { getRequest } = await import("@tanstack/react-start/server");
+      const req = getRequest();
+      const auth = req?.headers.get("authorization");
+      if (!auth?.startsWith("Bearer "))
+        throw new Error("Staff must be signed in");
+      const token = auth.slice(7);
+      const { data: claims, error: cErr } = await supabaseAdmin.auth.getUser(token);
+      if (cErr || !claims.user) throw new Error("Invalid session");
+      const uid = claims.user.id;
+      const { data: prof } = await supabaseAdmin
+        .from("profiles")
+        .select("full_name")
+        .eq("id", uid)
+        .maybeSingle();
+      const { data: roleRow } = await supabaseAdmin
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", uid)
+        .maybeSingle();
+      if (!roleRow) throw new Error("No role assigned");
+      submitterType = "staff";
+      submitterUserId = uid;
+      actorUserId = uid;
+      actorName = prof?.full_name ?? "Staff";
+      if (data.submitter.mode === "on_behalf_of_guest") {
+        if (!data.submitter.on_behalf_of_guest_id)
+          throw new Error("Select a guest");
+        const gid = data.submitter.on_behalf_of_guest_id.toUpperCase();
+        const { data: g } = await supabaseAdmin
+          .from("guests")
+          .select("guest_id")
+          .eq("guest_id", gid)
+          .maybeSingle();
+        if (!g) throw new Error("Invalid guest");
+        onBehalfGuestId = gid;
+        effectiveRole = "guest"; // crucial rule
+        actorKind = "crew";
+      } else {
+        effectiveRole = "crew";
+        actorKind = "crew";
+      }
+    }
+
+    // Classify (may split into multiple tickets)
+    const classified = await classifySubmission(data.description, effectiveRole);
+
+    // Role validation: guest-effective submissions must have guest_allowed === true
+    const rejected = classified.filter(
+      (c) => effectiveRole === "guest" && !c.guest_allowed,
+    );
+    const accepted = classified.filter(
+      (c) => effectiveRole === "crew" || c.guest_allowed,
+    );
+
+    if (accepted.length === 0) {
+      return {
+        created: [],
+        rejected: rejected.map((r) => ({
+          department: r.department,
+          subcategory: r.subcategory,
+          reason:
+            "This type of request is not available to guests. Please contact crew directly if you need help.",
+        })),
+      };
+    }
+
+    const parentId = crypto.randomUUID();
+    const rows = accepted.map((c) => ({
+      submitter_type: submitterType,
+      submitter_guest_id: submitterGuestId,
+      submitter_user_id: submitterUserId,
+      on_behalf_of_guest_id: onBehalfGuestId,
+      effective_role: effectiveRole,
+      description: c.description,
+      department: c.department,
+      subcategory: c.subcategory,
+      priority: c.priority,
+      confidence: c.confidence,
+      guest_allowed: c.guest_allowed,
+      ai_classified: c.ai_classified,
+      parent_submission_id: accepted.length > 1 ? parentId : null,
+      status: "New" as const,
+    }));
+
+    const { data: created, error } = await supabaseAdmin
+      .from("tickets")
+      .insert(rows)
+      .select("*");
+    if (error) {
+      console.error("[submit] insert failed:", error);
+      throw new Error("Could not create ticket");
+    }
+
+    const { logAiDecision } = await import("./ai-risk.server");
+    const { routeTicket } = await import("./routing.server");
+    const { assessRisk } = await import("./risk-detect.server");
+    const { notify } = await import("./notify.server");
+    for (const t of created ?? []) {
+      const risk = assessRisk(`${data.description} ${t.description}`, {
+        description: t.description,
+        department: t.department as never,
+        subcategory: t.subcategory ?? "",
+        priority: (t.priority ?? "Medium") as never,
+        confidence: Number(t.confidence ?? 0),
+        guest_allowed: t.guest_allowed,
+        ai_classified: t.ai_classified,
+      });
+
+      await writeAudit(supabaseAdmin, {
+        ticket_id: t.id,
+        actor_kind: actorKind,
+        actor_user_id: actorUserId,
+        actor_guest_id: actorGuestId,
+        actor_name: actorName,
+        action: "ticket.created",
+        details: {
+          department: t.department,
+          priority: t.priority,
+          ai_classified: t.ai_classified,
+          confidence: t.confidence,
+          split: accepted.length > 1,
+          risk_flags: risk.reasons,
+        },
+      });
+      if (t.ai_classified) {
+        await logAiDecision(supabaseAdmin, {
+          decision_type: "classification",
+          ticket_id: t.id,
+          confidence: Number(t.confidence ?? 0),
+          input_summary: data.description.slice(0, 500),
+          output_summary: `Routed to ${t.department} / ${t.subcategory}, priority ${t.priority}. Guest-allowed: ${t.guest_allowed}.`,
+          explanation: `AI parsed the submission, identified the issue type, and matched it to the ${t.department} department based on keywords and context. Priority assigned by severity language.`,
+        });
+      }
+
+      // High-risk auto-escalation: bypass analyst routing, go straight to admin.
+      if (risk.isHighRisk) {
+        const reasonText = `Auto-escalated: high-risk signals detected (${risk.reasons.join(", ")}).`;
+        await supabaseAdmin
+          .from("tickets")
+          .update({ status: "Escalated", priority: "Urgent", escalation_reason: reasonText })
+          .eq("id", t.id);
+        await supabaseAdmin.from("chat_messages").insert({
+          ticket_id: t.id,
+          sender_kind: "system",
+          sender_name: "System",
+          body: reasonText + " An administrator will take over shortly.",
+        });
+        await writeAudit(supabaseAdmin, {
+          ticket_id: t.id,
+          actor_kind: "system",
+          actor_name: "Risk Engine",
+          action: "ticket.auto_escalated",
+          details: { reasons: risk.reasons },
+        });
+        const { data: admins } = await supabaseAdmin
+          .from("user_roles")
+          .select("user_id")
+          .eq("role", "admin");
+        for (const a of admins ?? []) {
+          await notify(supabaseAdmin, {
+            user_id: a.user_id,
+            type: "ticket_escalated",
+            message: `High-risk ticket ${t.ticket_number} auto-escalated (${risk.reasons.join(", ")}).`,
+            ticket_id: t.id,
+          });
+        }
+        continue;
+      }
+
+      // Automatic routing to best-fit analyst (or queue if none available)
+      try {
+        await routeTicket(supabaseAdmin, t.id);
+      } catch (err) {
+        console.error("[routing] failed for ticket", t.id, err);
+      }
+    }
+
+    return {
+      created: created ?? [],
+      rejected: rejected.map((r) => ({
+        department: r.department,
+        subcategory: r.subcategory,
+        reason:
+          "This type of request is not available to guests. Please contact crew directly if you need help.",
+      })),
+    };
+  });
+
+// ------------------- Staff queries & actions -------------------
+
+export const listAllTickets = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        department: z.string().optional(),
+        priority: z.string().optional(),
+        status: z.string().optional(),
+        scope: z.enum(["all", "mine", "escalated", "guest", "crew"]).optional(),
+      })
+      .parse(input ?? {}),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    let q = supabaseAdmin.from("tickets").select("*").order("created_at", { ascending: false });
+    if (data.department && data.department !== "all") q = q.eq("department", data.department as "IT" | "HR" | "Finance" | "Operations");
+    if (data.priority && data.priority !== "all") q = q.eq("priority", data.priority as "Low" | "Medium" | "High" | "Urgent");
+    if (data.status && data.status !== "all") q = q.eq("status", data.status as "New" | "Needs Review" | "In Progress" | "Escalated" | "Resolved" | "Rejected");
+    if (data.scope === "mine") q = q.eq("assigned_to", context.userId);
+    if (data.scope === "escalated") q = q.eq("status", "Escalated");
+    if (data.scope === "guest") q = q.eq("effective_role", "guest");
+    if (data.scope === "crew") q = q.eq("effective_role", "crew");
+    const { data: rows, error } = await q;
+    if (error) throw new Error("Failed to load tickets");
+    return rows ?? [];
+  });
+
+export const getStaffTicket = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ ticket_id: z.string().uuid() }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const [ticket, resp, chat, audit, guest, assignedProf, escalatedProf] = await Promise.all([
+      supabaseAdmin.from("tickets").select("*").eq("id", data.ticket_id).maybeSingle(),
+      supabaseAdmin.from("ticket_responses").select("*").eq("ticket_id", data.ticket_id).order("created_at"),
+      supabaseAdmin.from("chat_messages").select("*").eq("ticket_id", data.ticket_id).order("created_at"),
+      supabaseAdmin.from("audit_log").select("*").eq("ticket_id", data.ticket_id).order("created_at"),
+      Promise.resolve(null),
+      Promise.resolve(null),
+      Promise.resolve(null),
+    ]);
+    if (!ticket.data) throw new Error("Ticket not found");
+    const t = ticket.data;
+    const gid = t.submitter_guest_id ?? t.on_behalf_of_guest_id;
+    let g = null;
+    if (gid) {
+      const r = await supabaseAdmin.from("guests").select("*").eq("guest_id", gid).maybeSingle();
+      g = r.data;
+    }
+    let submitterStaff = null;
+    if (t.submitter_user_id) {
+      const r = await supabaseAdmin.from("profiles").select("id, full_name, email").eq("id", t.submitter_user_id).maybeSingle();
+      submitterStaff = r.data;
+    }
+    return {
+      ticket: t,
+      responses: resp.data ?? [],
+      chat: chat.data ?? [],
+      audit: audit.data ?? [],
+      guest: g,
+      submitterStaff,
+    };
+  });
+
+export const acceptTicket = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ ticket_id: z.string().uuid() }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: prof } = await supabaseAdmin.from("profiles").select("full_name").eq("id", context.userId).maybeSingle();
+    const { data: roleRow } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", context.userId).maybeSingle();
+    const role = roleRow?.role ?? "analyst";
+    const update: { status: "In Progress"; assigned_to?: string; escalated_to?: string } = { status: "In Progress" };
+    if (role === "admin") update.escalated_to = context.userId;
+    else update.assigned_to = context.userId;
+    const { error } = await supabaseAdmin.from("tickets").update(update).eq("id", data.ticket_id);
+    if (error) throw new Error("Could not accept ticket");
+    await writeAudit(supabaseAdmin, {
+      ticket_id: data.ticket_id,
+      actor_kind: role as "analyst" | "admin",
+      actor_user_id: context.userId,
+      actor_name: prof?.full_name ?? "Staff",
+      action: "ticket.accepted",
+    });
+    return { ok: true };
+  });
+
+export const respondTicket = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        ticket_id: z.string().uuid(),
+        body: z.string().trim().min(1).max(4000),
+        is_internal_note: z.boolean().default(false),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { notify } = await import("./notify.server");
+    const { data: prof } = await supabaseAdmin.from("profiles").select("full_name").eq("id", context.userId).maybeSingle();
+    const { data: roleRow } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", context.userId).maybeSingle();
+    const role = roleRow?.role ?? "analyst";
+    const { error } = await supabaseAdmin.from("ticket_responses").insert({
+      ticket_id: data.ticket_id,
+      author_user_id: context.userId,
+      body: data.body,
+      is_internal_note: data.is_internal_note,
+    });
+    if (error) throw new Error("Could not save response");
+    if (!data.is_internal_note) {
+      await supabaseAdmin
+        .from("tickets")
+        .update({ first_response_at: new Date().toISOString() })
+        .eq("id", data.ticket_id)
+        .is("first_response_at", null);
+    }
+    await writeAudit(supabaseAdmin, {
+      ticket_id: data.ticket_id,
+      actor_kind: role as "analyst" | "admin",
+      actor_user_id: context.userId,
+      actor_name: prof?.full_name ?? "Staff",
+      action: data.is_internal_note ? "ticket.note_added" : "ticket.responded",
+    });
+    // Notify the crew submitter (if any) of a new public response
+    if (!data.is_internal_note) {
+      const { data: t } = await supabaseAdmin
+        .from("tickets")
+        .select("submitter_user_id, assigned_to, ticket_number")
+        .eq("id", data.ticket_id)
+        .maybeSingle();
+      if (t) {
+        const recipients = new Set<string>();
+        if (t.submitter_user_id && t.submitter_user_id !== context.userId) recipients.add(t.submitter_user_id);
+        if (t.assigned_to && t.assigned_to !== context.userId) recipients.add(t.assigned_to);
+        for (const uid of recipients) {
+          await notify(supabaseAdmin, {
+            user_id: uid,
+            type: "ticket_response",
+            message: `New response on ticket ${t.ticket_number} from ${prof?.full_name ?? "Staff"}.`,
+            ticket_id: data.ticket_id,
+          });
+        }
+      }
+    }
+    return { ok: true };
+  });
+
+
+export const resolveTicket = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ ticket_id: z.string().uuid() }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { notify } = await import("./notify.server");
+    const { data: prof } = await supabaseAdmin.from("profiles").select("full_name").eq("id", context.userId).maybeSingle();
+    const { data: roleRow } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", context.userId).maybeSingle();
+    const role = (roleRow?.role ?? "analyst") as "crew" | "analyst" | "admin";
+
+    const { data: t } = await supabaseAdmin
+      .from("tickets")
+      .select("status, escalated_by, escalated_to, submitter_user_id, submitter_type, on_behalf_of_guest_id, assigned_to, ticket_number")
+      .eq("id", data.ticket_id)
+      .maybeSingle();
+    if (!t) throw new Error("Ticket not found");
+    if (t.status === "Resolved" || t.status === "Rejected") throw new Error("Ticket already closed");
+
+    if (role === "admin") {
+      if (t.status !== "Escalated" && t.escalated_to !== context.userId) {
+        throw new Error("Admins can only resolve escalated tickets");
+      }
+    } else if (role === "analyst") {
+      if (t.escalated_by && t.escalated_by === context.userId) {
+        throw new Error("You escalated this ticket — only the admin can resolve it, unless the escalation is rejected back to you.");
+      }
+      if (t.status === "Escalated") {
+        throw new Error("This ticket is currently escalated to the admin.");
+      }
+    }
+
+    const actorName = prof?.full_name ?? "Staff";
+
+    const needsCrewApproval =
+      t.submitter_type === "staff" &&
+      !t.on_behalf_of_guest_id &&
+      t.submitter_user_id &&
+      t.submitter_user_id !== context.userId;
+
+    if (needsCrewApproval) {
+      const { data: existing } = await supabaseAdmin
+        .from("approval_tasks")
+        .select("id")
+        .eq("ticket_id", data.ticket_id)
+        .eq("task_type", "resolution_approval")
+        .eq("status", "pending")
+        .maybeSingle();
+      if (!existing) {
+        await supabaseAdmin.from("approval_tasks").insert({
+          ticket_id: data.ticket_id,
+          task_type: "resolution_approval",
+          requested_by: context.userId,
+          assigned_to: t.submitter_user_id,
+          status: "pending",
+          reason: `${actorName} proposes closing this ticket.`,
+        });
+      }
+      await supabaseAdmin
+        .from("tickets")
+        .update({ status: "Needs Review" })
+        .eq("id", data.ticket_id);
+      await supabaseAdmin.from("chat_messages").insert({
+        ticket_id: data.ticket_id,
+        sender_kind: "system",
+        sender_name: "System",
+        body: `${actorName} proposed closing this ticket. Awaiting requester approval (auto-approves in 2 hours).`,
+      });
+      await notify(supabaseAdmin, {
+        user_id: t.submitter_user_id,
+        type: "approval_requested",
+        message: `Approval needed to close ticket ${t.ticket_number}. Auto-approves in 2h.`,
+        ticket_id: data.ticket_id,
+      });
+      await writeAudit(supabaseAdmin, {
+        ticket_id: data.ticket_id,
+        actor_kind: role as "analyst" | "admin",
+        actor_user_id: context.userId,
+        actor_name: actorName,
+        action: "resolution.approval_requested",
+      });
+      return { ok: true, pendingApproval: true };
+    }
+
+    const { error } = await supabaseAdmin
+      .from("tickets")
+      .update({ status: "Resolved", resolved_at: new Date().toISOString() })
+      .eq("id", data.ticket_id);
+    if (error) throw new Error("Could not resolve");
+    await writeAudit(supabaseAdmin, {
+      ticket_id: data.ticket_id,
+      actor_kind: role as "analyst" | "admin",
+      actor_user_id: context.userId,
+      actor_name: actorName,
+      action: "ticket.resolved",
+    });
+    if (t.submitter_user_id && t.submitter_user_id !== context.userId) {
+      await notify(supabaseAdmin, {
+        user_id: t.submitter_user_id,
+        type: "ticket_resolved",
+        message: `Ticket ${t.ticket_number} was resolved by ${actorName}.`,
+        ticket_id: data.ticket_id,
+      });
+    }
+    return { ok: true, pendingApproval: false };
+  });
+
+
+export const rejectTicket = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ ticket_id: z.string().uuid(), reason: z.string().trim().min(3).max(1000) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: prof } = await supabaseAdmin.from("profiles").select("full_name").eq("id", context.userId).maybeSingle();
+    const { data: roleRow } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", context.userId).maybeSingle();
+    const role = (roleRow?.role ?? "analyst") as "crew" | "analyst" | "admin";
+
+    const { error } = await supabaseAdmin
+      .from("tickets")
+      .update({ status: "Rejected", rejection_reason: data.reason, resolved_at: new Date().toISOString() })
+      .eq("id", data.ticket_id);
+    if (error) throw new Error("Could not reject ticket");
+
+    await supabaseAdmin.from("chat_messages").insert({
+      ticket_id: data.ticket_id,
+      sender_kind: "system",
+      sender_name: "System",
+      body: `Ticket rejected: ${data.reason}`,
+    });
+    await writeAudit(supabaseAdmin, {
+      ticket_id: data.ticket_id,
+      actor_kind: role as "analyst" | "admin",
+      actor_user_id: context.userId,
+      actor_name: prof?.full_name ?? "Staff",
+      action: "ticket.rejected",
+      details: { reason: data.reason },
+    });
+    return { ok: true };
+  });
+
+export const escalateTicket = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ ticket_id: z.string().uuid(), reason: z.string().trim().min(3).max(1000) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: prof } = await supabaseAdmin.from("profiles").select("full_name").eq("id", context.userId).maybeSingle();
+    const { error } = await supabaseAdmin
+      .from("tickets")
+      .update({
+        status: "Escalated",
+        escalated_by: context.userId,
+        escalation_reason: data.reason,
+        escalation_rejection_reason: null,
+      })
+      .eq("id", data.ticket_id);
+    if (error) throw new Error("Could not escalate");
+
+    await supabaseAdmin.from("chat_messages").insert({
+      ticket_id: data.ticket_id,
+      sender_kind: "system",
+      sender_name: "System",
+      body: `Ticket escalated to admin: ${data.reason}. The conversation continues here.`,
+    });
+
+    await writeAudit(supabaseAdmin, {
+      ticket_id: data.ticket_id,
+      actor_kind: "analyst",
+      actor_user_id: context.userId,
+      actor_name: prof?.full_name ?? "Analyst",
+      action: "ticket.escalated",
+      details: { reason: data.reason },
+    });
+    // Notify all admins
+    const { notify } = await import("./notify.server");
+    const { data: admins } = await supabaseAdmin
+      .from("user_roles")
+      .select("user_id")
+      .eq("role", "admin");
+    const { data: tRow } = await supabaseAdmin
+      .from("tickets")
+      .select("ticket_number")
+      .eq("id", data.ticket_id)
+      .maybeSingle();
+    for (const a of admins ?? []) {
+      await notify(supabaseAdmin, {
+        user_id: a.user_id,
+        type: "ticket_escalated",
+        message: `Ticket ${tRow?.ticket_number ?? ""} escalated by ${prof?.full_name ?? "Analyst"}.`,
+        ticket_id: data.ticket_id,
+      });
+    }
+    return { ok: true };
+  });
+
+
+export const rejectEscalation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ ticket_id: z.string().uuid(), reason: z.string().trim().min(3).max(1000) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: roleRow } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", context.userId).maybeSingle();
+    if (roleRow?.role !== "admin") throw new Error("Admins only");
+    const { data: prof } = await supabaseAdmin.from("profiles").select("full_name").eq("id", context.userId).maybeSingle();
+    const { error } = await supabaseAdmin
+      .from("tickets")
+      .update({
+        status: "In Progress",
+        escalated_to: null,
+        escalated_by: null,
+        escalation_rejection_reason: data.reason,
+      })
+      .eq("id", data.ticket_id);
+    if (error) throw new Error("Could not reject escalation");
+    await supabaseAdmin.from("chat_messages").insert({
+      ticket_id: data.ticket_id,
+      sender_kind: "system",
+      sender_name: "System",
+      body: `Escalation rejected by admin: ${data.reason}. Returned to analyst queue.`,
+    });
+    await writeAudit(supabaseAdmin, {
+      ticket_id: data.ticket_id,
+      actor_kind: "admin",
+      actor_user_id: context.userId,
+      actor_name: prof?.full_name ?? "Admin",
+      action: "escalation.rejected",
+      details: { reason: data.reason },
+    });
+    // Notify the analyst who originally escalated
+    const { notify } = await import("./notify.server");
+    const { data: t } = await supabaseAdmin
+      .from("tickets")
+      .select("assigned_to, ticket_number")
+      .eq("id", data.ticket_id)
+      .maybeSingle();
+    await notify(supabaseAdmin, {
+      user_id: t?.assigned_to ?? null,
+      type: "escalation_rejected",
+      message: `Escalation on ${t?.ticket_number ?? "ticket"} rejected: ${data.reason}`,
+      ticket_id: data.ticket_id,
+    });
+    return { ok: true };
+  });
+
+
+export const generateAIDraft = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ ticket_id: z.string().uuid() }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { logAiDecision } = await import("./ai-risk.server");
+    const { data: t } = await supabaseAdmin
+      .from("tickets")
+      .select("id, description, department")
+      .eq("id", data.ticket_id)
+      .maybeSingle();
+    if (!t) throw new Error("Not found");
+    const draft = await aiDraftResponse(t.description, t.department ?? "Operations");
+    await logAiDecision(supabaseAdmin, {
+      decision_type: "response",
+      ticket_id: t.id,
+      confidence: 0.8,
+      input_summary: t.description.slice(0, 500),
+      output_summary: draft.slice(0, 800),
+      explanation: `AI drafted a concierge-style response for the ${t.department ?? "Operations"} team. Reviewer must approve or edit before sending to the guest.`,
+    });
+    return { draft };
+  });
